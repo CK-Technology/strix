@@ -1,0 +1,65 @@
+[package]
+name = "strix"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "S3-compatible object storage server"
+
+[[bin]]
+name = "strix"
+path = "src/main.rs"
+
+[features]
+default = []
+otel = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:tracing-opentelemetry",
+]
+
+[dependencies]
+strix-core.workspace = true
+strix-crypto.workspace = true
+strix-storage.workspace = true
+strix-s3.workspace = true
+strix-iam.workspace = true
+strix-admin.workspace = true
+
+tokio-rusqlite.workspace = true
+
+tokio.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+http-body-util.workspace = true
+s3s.workspace = true
+futures.workspace = true
+base64.workspace = true
+uuid.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+clap.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+
+metrics.workspace = true
+metrics-exporter-prometheus.workspace = true
+
+rust-embed.workspace = true
+mime_guess.workspace = true
+
+# OpenTelemetry (optional)
+opentelemetry = { version = "0.28", optional = true }
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.28", features = ["grpc-tonic"], optional = true }
+tracing-opentelemetry = { version = "0.29", optional = true }

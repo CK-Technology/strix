@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strix - Object Storage Console</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Strix Tailwind Configuration
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Strix brand colors
+                        strix: {
+                            50: '#ecfeff',
+                            100: '#cffafe',
+                            200: '#a5f3fc',
+                            300: '#67e8f9',
+                            400: '#22d3ee',
+                            500: '#06b6d4',  // Primary Strix cyan
+                            600: '#0891b2',
+                            700: '#0e7490',
+                            800: '#155e75',
+                            900: '#164e63',
+                            950: '#083344',
+                        },
+                        // Dark navy theme
+                        navy: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',  // Main background
+                            950: '#020617',  // Deepest background
+                        }
+                    },
+                    // Focus ring configuration
+                    ringColor: {
+                        DEFAULT: '#06b6d4',
+                    },
+                    ringOffsetColor: {
+                        DEFAULT: '#0f172a',
+                    },
+                    // Animation for focus states
+                    animation: {
+                        'pulse-subtle': 'pulse-subtle 2s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        'pulse-subtle': {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.8' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* CSS Custom Properties for Strix Theme */
+        :root {
+            /* Brand colors */
+            --strix-primary: #06b6d4;
+            --strix-primary-hover: #0891b2;
+            --strix-primary-light: #22d3ee;
+            --strix-primary-dark: #0e7490;
+
+            /* Background colors */
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --bg-elevated: #1e293b;
+
+            /* Text colors */
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --text-accent: #06b6d4;
+
+            /* Border colors */
+            --border-primary: #334155;
+            --border-secondary: #475569;
+            --border-accent: #06b6d4;
+
+            /* Status colors */
+            --status-success: #22c55e;
+            --status-warning: #f59e0b;
+            --status-error: #ef4444;
+            --status-info: #06b6d4;
+
+            /* Spacing scale */
+            --space-xs: 0.25rem;
+            --space-sm: 0.5rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+
+            /* Border radius */
+            --radius-sm: 0.25rem;
+            --radius-md: 0.375rem;
+            --radius-lg: 0.5rem;
+            --radius-xl: 0.75rem;
+
+            /* Focus ring */
+            --focus-ring: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--strix-primary);
+            --focus-ring-inset: inset 0 0 0 2px var(--strix-primary);
+        }
+
+        /* Custom scrollbar - dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-secondary);
+            border-radius: var(--radius-sm);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Focus styles */
+        *:focus-visible {
+            outline: none;
+            box-shadow: var(--focus-ring);
+        }
+
+        /* Button focus override */
+        button:focus-visible,
+        a:focus-visible,
+        [role="button"]:focus-visible {
+            outline: none;
+            box-shadow: var(--focus-ring);
+        }
+
+        /* Input focus override */
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+            outline: none;
+            border-color: var(--strix-primary);
+            box-shadow: var(--focus-ring-inset);
+        }
+
+        /* Loading spinner - Strix cyan color */
+        .loading-spinner {
+            border: 3px solid var(--bg-secondary);
+            border-top: 3px solid var(--strix-primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Initial loading screen - dark theme */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            z-index: 9999;
+        }
+
+        #loading-screen.hidden {
+            display: none;
+        }
+
+        /* Transition utilities */
+        .transition-theme {
+            transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+        }
+
+        /* Selection color */
+        ::selection {
+            background: var(--strix-primary);
+            color: var(--bg-primary);
+        }
+
+        /* Screen reader only - hidden visually but accessible */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Skip link - visible on focus */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--strix-primary);
+            color: var(--bg-primary);
+            padding: 8px 16px;
+            z-index: 100;
+            font-weight: 600;
+            border-radius: 0 0 var(--radius-md) 0;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Reduced motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+</head>
+<body class="bg-slate-900">
+    <div id="loading-screen">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-slate-400">Loading Strix Console...</p>
+        </div>
+    </div>
+    <script>
+        // Hide loading screen when WASM is ready
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check periodically if the app has loaded
+            const checkLoaded = setInterval(() => {
+                if (document.querySelector('main')) {
+                    document.getElementById('loading-screen').classList.add('hidden');
+                    clearInterval(checkLoaded);
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

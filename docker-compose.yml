@@ -1,0 +1,74 @@
+# Docker Compose for Strix development and testing
+#
+# Usage:
+#   docker compose up -d          # Start Strix
+#   docker compose logs -f strix  # View logs
+#   docker compose down -v        # Stop and remove volumes
+#
+# Access:
+#   S3 API:       http://localhost:9000
+#   Web Console:  http://localhost:9001
+#   Metrics:      http://localhost:9090/metrics
+
+services:
+  strix:
+    build: .
+    container_name: strix
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console & Admin API
+      - "9090:9090"   # Prometheus Metrics
+    environment:
+      STRIX_ROOT_USER: ${STRIX_ROOT_USER:-admin}
+      STRIX_ROOT_PASSWORD: ${STRIX_ROOT_PASSWORD:-password123}
+      STRIX_LOG_LEVEL: ${STRIX_LOG_LEVEL:-info}
+      STRIX_LOG_JSON: ${STRIX_LOG_JSON:-false}
+    volumes:
+      - strix-data:/var/lib/strix
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: strix-prometheus
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - strix
+
+  # Optional: Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: strix-grafana
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  strix-data:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,32 @@
+[package]
+name = "strix-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Storage backend implementations for Strix object storage"
+
+[dependencies]
+strix-core.workspace = true
+strix-crypto.workspace = true
+
+tokio = { workspace = true, features = ["fs", "io-util"] }
+tokio-rusqlite.workspace = true
+rusqlite.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+async-stream.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+
+tracing.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+bytes.workspace = true
+uuid.workspace = true
+ulid.workspace = true
+md5.workspace = true
+parking_lot.workspace = true
+dashmap.workspace = true

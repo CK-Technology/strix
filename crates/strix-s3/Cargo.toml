@@ -1,0 +1,35 @@
+[package]
+name = "strix-s3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "S3 API implementation for Strix object storage"
+
+[dependencies]
+strix-core.workspace = true
+strix-storage.workspace = true
+strix-crypto.workspace = true
+strix-iam.workspace = true
+
+s3s.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+serde.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+time.workspace = true
+bytes.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+hex.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+urlencoding = "2"
+metrics.workspace = true
+http.workspace = true
+serde_json.workspace = true

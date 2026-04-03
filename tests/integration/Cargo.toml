@@ -1,0 +1,62 @@
+[package]
+name = "strix-integration-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# AWS SDK for S3 testing
+aws-config = "1"
+aws-sdk-s3 = "1"
+aws-credential-types = "1"
+aws-smithy-runtime-api = "1"
+
+# Async runtime
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+# Testing utilities
+assert2 = "0.3"
+tempfile = "3"
+uuid = { workspace = true }
+
+# HTTP client for admin API
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+md5 = "0.7"
+
+# Tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Database
+tokio-rusqlite = { workspace = true }
+
+# Internal crates (for test fixtures)
+strix-core = { workspace = true }
+strix-storage = { workspace = true }
+strix-iam = { workspace = true }
+
+[[test]]
+name = "s3_conformance"
+path = "src/s3_conformance.rs"
+
+[[test]]
+name = "multipart"
+path = "src/multipart.rs"
+
+[[test]]
+name = "versioning"
+path = "src/versioning.rs"
+
+[[test]]
+name = "iam"
+path = "src/iam.rs"
+
+[[test]]
+name = "recovery"
+path = "src/recovery.rs"

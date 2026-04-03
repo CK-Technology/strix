@@ -1,6 +1,44 @@
+target/
 /target
 Cargo.lock
 **/*.rs.bk
 TODO.md
 DEVELOPMENT_ROADMAP.md
 CLAUDE.md
+tasks/lessons.md
+# GUI build output
+crates/strix-gui/dist/
+
+# Docker
+docker-build/
+
+# Local data
+data/
+dev-data/
+test-data/
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
+
+# ck stuff
+archive/
+SPEC.md
+FRONT_END.md
+WEB_GUI.md 

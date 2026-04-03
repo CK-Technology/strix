@@ -1,0 +1,16 @@
+# Typos configuration
+# https://github.com/crate-ci/typos
+
+[default.extend-words]
+# S3/MinIO terminology
+AKIA = "AKIA"  # AWS access key prefix
+minio = "minio"
+strix = "strix"
+
+[files]
+extend-exclude = [
+    "archive/",
+    "target/",
+    "*.lock",
+    "*.wasm",
+]

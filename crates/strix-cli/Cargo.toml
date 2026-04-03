@@ -1,0 +1,40 @@
+[package]
+name = "strix-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Command-line tool for Strix object storage"
+
+[[bin]]
+name = "sx"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# S3 client
+aws-config = { version = "1", default-features = false, features = ["rustls"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-credential-types = "1"
+
+# For config file
+dirs = "6"
+toml = "0.8"
+
+# Progress bars
+indicatif = "0.17"
+
+# Human-readable sizes
+humansize = "2"
+
+# Colored output
+colored = "3"
