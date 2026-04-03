@@ -1,0 +1,36 @@
+# Production overrides for Strix
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Or set COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+
+services:
+  strix:
+    # Use pre-built image instead of building
+    image: ${STRIX_IMAGE:-ghcr.io/your-org/strix:latest}
+    build: !reset null
+
+    # Production restart policy
+    restart: always
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+    # Production logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+    environment:
+      STRIX_LOG_JSON: "true"

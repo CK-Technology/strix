@@ -12,8 +12,8 @@ pub fn Login() -> impl IntoView {
     let app_state = expect_context::<AppState>();
     let navigate = use_navigate();
 
-    let access_key = RwSignal::new(String::new());
-    let secret_key = RwSignal::new(String::new());
+    let username = RwSignal::new(String::new());
+    let password = RwSignal::new(String::new());
     let error = RwSignal::new(Option::<String>::None);
     let loading = RwSignal::new(false);
 
@@ -23,11 +23,11 @@ pub fn Login() -> impl IntoView {
         move |ev: web_sys::SubmitEvent| {
             ev.prevent_default();
 
-            let access_key_val = access_key.get();
-            let secret_key_val = secret_key.get();
+            let username_val = username.get();
+            let password_val = password.get();
 
-            if access_key_val.is_empty() || secret_key_val.is_empty() {
-                error.set(Some("Access key and secret key are required".to_string()));
+            if username_val.is_empty() || password_val.is_empty() {
+                error.set(Some("Username and password are required".to_string()));
                 return;
             }
 
@@ -40,7 +40,7 @@ pub fn Login() -> impl IntoView {
             let navigate = navigate.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
-                match api.login(&access_key_val, &secret_key_val).await {
+                match api.login_with_password(&username_val, &password_val).await {
                     Ok(response) => {
                         // Store the session and navigate to dashboard
                         app_state.login(response.username, response.token);
@@ -91,32 +91,34 @@ pub fn Login() -> impl IntoView {
 
                     <div class="space-y-4">
                         <div>
-                            <label for="access-key" class="block text-sm font-medium text-slate-300">
-                                "Access Key ID"
+                            <label for="username" class="block text-sm font-medium text-slate-300">
+                                "Username"
                             </label>
                             <input
-                                id="access-key"
+                                id="username"
                                 type="text"
                                 required=true
+                                autocomplete="username"
                                 class="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm text-white placeholder-slate-400 focus:outline-none focus:ring-strix-500 focus:border-strix-500 sm:text-sm"
-                                placeholder="AKIAIOSFODNN7EXAMPLE"
-                                prop:value=move || access_key.get()
-                                on:input=move |ev| access_key.set(event_target_value(&ev))
+                                placeholder="root"
+                                prop:value=move || username.get()
+                                on:input=move |ev| username.set(event_target_value(&ev))
                             />
                         </div>
 
                         <div>
-                            <label for="secret-key" class="block text-sm font-medium text-slate-300">
-                                "Secret Access Key"
+                            <label for="password" class="block text-sm font-medium text-slate-300">
+                                "Password"
                             </label>
                             <input
-                                id="secret-key"
+                                id="password"
                                 type="password"
                                 required=true
+                                autocomplete="current-password"
                                 class="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm text-white placeholder-slate-400 focus:outline-none focus:ring-strix-500 focus:border-strix-500 sm:text-sm"
-                                placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                                prop:value=move || secret_key.get()
-                                on:input=move |ev| secret_key.set(event_target_value(&ev))
+                                placeholder="Enter your password"
+                                prop:value=move || password.get()
+                                on:input=move |ev| password.set(event_target_value(&ev))
                             />
                         </div>
                     </div>

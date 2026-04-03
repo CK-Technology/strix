@@ -94,6 +94,57 @@ impl ApiClient {
         }
     }
 
+    /// Login with username and password.
+    /// Returns the login response containing the JWT token on success.
+    pub async fn login_with_password(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<LoginResponse, ApiError> {
+        let url = format!("{}/login/password", self.base_url);
+        let body = PasswordLoginRequest {
+            username: username.to_string(),
+            password: password.to_string(),
+        };
+
+        let request = Request::post(&url)
+            .header("Content-Type", "application/json")
+            .body(serde_json::to_string(&body).map_err(|e| ApiError::Parse(e.to_string()))?)?;
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::Network(e.to_string()))?;
+
+        if response.ok() {
+            response
+                .json()
+                .await
+                .map_err(|e| ApiError::Parse(e.to_string()))
+        } else {
+            // Check for rate limiting
+            if response.status() == 429 {
+                let rate_limit: RateLimitError = response
+                    .json()
+                    .await
+                    .unwrap_or(RateLimitError {
+                        error: "Too many requests".to_string(),
+                        retry_after: 60,
+                    });
+                return Err(ApiError::RateLimited(rate_limit.retry_after));
+            }
+
+            let error: ErrorResponse = response
+                .json()
+                .await
+                .unwrap_or(ErrorResponse {
+                    error: "Unknown error".to_string(),
+                    message: None,
+                });
+            Err(ApiError::Api(error.error))
+        }
+    }
+
     /// Make a GET request with authentication.
     pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, ApiError> {
         let url = format!("{}{}", self.base_url, path);
@@ -349,7 +400,11 @@ impl ApiClient {
 
     /// List all groups.
     pub async fn list_groups(&self) -> Result<ListGroupsResponse, ApiError> {
-        self.get("/groups").await
+        let mut resp: ListGroupsResponse = self.get("/groups").await?;
+        if resp.groups.is_empty() && !resp.items.is_empty() {
+            resp.groups = resp.items.clone();
+        }
+        Ok(resp)
     }
 
     /// Create a new group.
@@ -389,14 +444,22 @@ impl ApiClient {
 
     /// List groups a user belongs to.
     pub async fn list_user_groups(&self, username: &str) -> Result<ListGroupsResponse, ApiError> {
-        self.get(&format!("/users/{}/groups", username)).await
+        let mut resp: ListGroupsResponse = self.get(&format!("/users/{}/groups", username)).await?;
+        if resp.groups.is_empty() && !resp.items.is_empty() {
+            resp.groups = resp.items.clone();
+        }
+        Ok(resp)
     }
 
     // === Managed Policy Operations ===
 
     /// List all managed policies.
     pub async fn list_policies(&self) -> Result<ListPoliciesResponse, ApiError> {
-        self.get("/policies").await
+        let mut resp: ListPoliciesResponse = self.get("/policies").await?;
+        if resp.policies.is_empty() && !resp.items.is_empty() {
+            resp.policies = resp.items.clone();
+        }
+        Ok(resp)
     }
 
     /// Create or update a managed policy.
@@ -423,7 +486,11 @@ impl ApiClient {
 
     /// List all buckets.
     pub async fn list_buckets(&self) -> Result<ListBucketsResponse, ApiError> {
-        self.get("/buckets").await
+        let mut resp: ListBucketsResponse = self.get("/buckets").await?;
+        if resp.buckets.is_empty() && !resp.items.is_empty() {
+            resp.buckets = resp.items.clone();
+        }
+        Ok(resp)
     }
 
     pub async fn list_buckets_for_tenant(
@@ -432,8 +499,12 @@ impl ApiClient {
     ) -> Result<ListBucketsResponse, ApiError> {
         match tenant_slug {
             Some(slug) if !slug.is_empty() => {
-                self.get(&format!("/buckets?tenant_slug={}", urlencoding::encode(slug)))
-                    .await
+                let mut resp: ListBucketsResponse = self.get(&format!("/buckets?tenant_slug={}", urlencoding::encode(slug)))
+                    .await?;
+                if resp.buckets.is_empty() && !resp.items.is_empty() {
+                    resp.buckets = resp.items.clone();
+                }
+                Ok(resp)
             }
             _ => self.list_buckets().await,
         }
@@ -709,6 +780,13 @@ struct LoginRequest {
     secret_access_key: String,
 }
 
+/// Password login request body.
+#[derive(Debug, Serialize)]
+struct PasswordLoginRequest {
+    username: String,
+    password: String,
+}
+
 /// Login response from the server.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginResponse {
@@ -828,7 +906,10 @@ struct AddUserToGroupRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListGroupsResponse {
+    #[serde(default)]
     pub groups: Vec<GroupInfo>,
+    #[serde(default)]
+    pub items: Vec<GroupInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -874,7 +955,10 @@ struct CreatePolicyRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListPoliciesResponse {
+    #[serde(default)]
     pub policies: Vec<PolicyInfo>,
+    #[serde(default)]
+    pub items: Vec<PolicyInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -905,7 +989,10 @@ pub struct BucketUsage {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListBucketsResponse {
+    #[serde(default)]
     pub buckets: Vec<BucketInfo>,
+    #[serde(default)]
+    pub items: Vec<BucketInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

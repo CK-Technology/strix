@@ -17,7 +17,7 @@ use strix_core::{AuditLogEntry, ObjectStore};
 use strix_iam::{AccessKeyStatus, IamProvider, IamStore, UserStatus};
 use strix_storage::LocalFsStore;
 
-use crate::auth::{AuthState, CsrfConfig, LoginRequest, LoginResponse, RateLimitResponse};
+use crate::auth::{AuthState, CsrfConfig, LoginRequest, LoginResponse, PasswordLoginRequest, RateLimitResponse};
 use crate::{ErrorCode, PaginatedResponse, PaginationQuery};
 
 use crate::{
@@ -279,7 +279,7 @@ pub async fn login(
                 match state
                     .auth
                     .session_config
-                    .create_token(&user.username, &access_key.access_key_id)
+                    .create_token(&user.username, &access_key.access_key_id, user.is_root)
                 {
                     Ok(token) => {
                         let expires_at = Utc::now()
@@ -318,6 +318,106 @@ pub async fn login(
         }
         Ok(None) => {
             // Access key not found
+            state.auth.rate_limiter.record_failure(&ip);
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse::new("Invalid credentials")),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new(format!("Authentication error: {}", e))),
+        )
+            .into_response(),
+    }
+}
+
+/// Password login handler with rate limiting.
+///
+/// Authenticates users with username/password (for console login).
+pub async fn login_with_password(
+    State(state): State<Arc<AdminState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(req): Json<PasswordLoginRequest>,
+) -> impl IntoResponse {
+    let ip = addr.ip();
+
+    // Check rate limiting
+    if state.auth.rate_limiter.is_limited(&ip) {
+        let retry_after = state.auth.rate_limiter.lockout_remaining(&ip).unwrap_or(60);
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(RateLimitResponse {
+                error: "Too many failed login attempts. Please try again later.".to_string(),
+                retry_after,
+            }),
+        )
+            .into_response();
+    }
+
+    // Verify username/password
+    match state.iam.verify_user_password(&req.username, &req.password).await {
+        Ok(true) => {
+            // Password verified - check user exists and is active
+            match state.iam.get_user(&req.username).await {
+                Ok(user) => {
+                    if user.status != UserStatus::Active {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(ErrorResponse::new("User account is not active")),
+                        )
+                            .into_response();
+                    }
+
+                    // Successful login - clear rate limit and generate token
+                    state.auth.rate_limiter.clear(&ip);
+
+                    // Create token with username (no access key for password login)
+                    match state
+                        .auth
+                        .session_config
+                        .create_token(&user.username, "password-auth", user.is_root)
+                    {
+                        Ok(token) => {
+                            let expires_at = Utc::now()
+                                + chrono::Duration::seconds(
+                                    state.auth.session_config.expiry.as_secs() as i64
+                                );
+
+                            (
+                                StatusCode::OK,
+                                Json(LoginResponse {
+                                    token,
+                                    expires_at: expires_at.to_rfc3339(),
+                                    username: user.username,
+                                }),
+                            )
+                                .into_response()
+                        }
+                        Err(e) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse::new(format!(
+                                "Failed to create session: {}",
+                                e
+                            ))),
+                        )
+                            .into_response(),
+                    }
+                }
+                Err(_) => {
+                    // User not found (shouldn't happen if password verified)
+                    state.auth.rate_limiter.record_failure(&ip);
+                    (
+                        StatusCode::UNAUTHORIZED,
+                        Json(ErrorResponse::new("Invalid credentials")),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        Ok(false) => {
+            // Wrong password
             state.auth.rate_limiter.record_failure(&ip);
             (
                 StatusCode::UNAUTHORIZED,

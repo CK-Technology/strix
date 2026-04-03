@@ -21,6 +21,7 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
     // Public routes (no auth required)
     let public_routes = Router::new()
         .route("/login", post(handlers::login))
+        .route("/login/password", post(handlers::login_with_password))
         .route("/health", get(handlers::health_check))
         .route("/info", get(handlers::get_server_info));
 
@@ -156,22 +157,24 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
         .route("/simulate-policy", post(handlers::simulate_policy))
         // STS
         .route("/sts/assume-role", post(handlers::assume_role))
-        // Apply CSRF middleware to all protected routes (before auth)
-        .route_layer(middleware::from_fn_with_state(
-            state.csrf.clone(),
-            csrf_middleware,
-        ))
-        // Apply auth middleware to all protected routes
-        .route_layer(middleware::from_fn_with_state(
-            state.auth.clone(),
-            auth_middleware,
-        ))
-        // Apply authorization middleware for authenticated non-root users
+        // Middleware is applied in reverse order (last applied runs first)
+        // Execution order: audit -> csrf -> auth -> authorize -> handler
+        // Apply authorization middleware (runs after auth)
         .route_layer(middleware::from_fn_with_state(
             iam_provider,
             authorize_middleware,
         ))
-        // Apply audit middleware for all authenticated admin operations
+        // Apply auth middleware (runs after CSRF, before authorize)
+        .route_layer(middleware::from_fn_with_state(
+            state.auth.clone(),
+            auth_middleware,
+        ))
+        // Apply CSRF middleware (runs after audit)
+        .route_layer(middleware::from_fn_with_state(
+            state.csrf.clone(),
+            csrf_middleware,
+        ))
+        // Apply audit middleware (runs first)
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             handlers::audit_middleware,

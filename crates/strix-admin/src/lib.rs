@@ -8,8 +8,8 @@ mod handlers;
 mod routes;
 
 pub use auth::{
-    AuthState, AuthenticatedUser, CsrfConfig, LoginRequest, LoginResponse, RateLimiter,
-    csrf_middleware,
+    AuthState, AuthenticatedUser, CsrfConfig, LoginRequest, LoginResponse, PasswordLoginRequest,
+    RateLimiter, csrf_middleware,
 };
 pub use handlers::{AdminState, PresignConfig, ServerConfig};
 pub use routes::admin_router;

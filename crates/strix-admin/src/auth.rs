@@ -29,6 +29,9 @@ pub struct Claims {
     pub sub: String,
     /// Access key ID used for authentication.
     pub access_key_id: String,
+    /// Whether this is the root user.
+    #[serde(default)]
+    pub is_root: bool,
     /// Issued at (Unix timestamp).
     pub iat: i64,
     /// Expiration (Unix timestamp).
@@ -65,13 +68,14 @@ impl SessionConfig {
     }
 
     /// Generate a session token for a user.
-    pub fn create_token(&self, username: &str, access_key_id: &str) -> Result<String, String> {
+    pub fn create_token(&self, username: &str, access_key_id: &str, is_root: bool) -> Result<String, String> {
         let now = Utc::now();
         let exp = now + ChronoDuration::seconds(self.expiry.as_secs() as i64);
 
         let claims = Claims {
             sub: username.to_string(),
             access_key_id: access_key_id.to_string(),
+            is_root,
             iat: now.timestamp(),
             exp: exp.timestamp(),
         };
@@ -407,11 +411,10 @@ pub async fn auth_middleware(
     match auth.session_config.verify_token(token) {
         Ok(claims) => {
             // Add authenticated user to request extensions
-            let is_root = claims.sub == "root";
             req.extensions_mut().insert(AuthenticatedUser {
                 username: claims.sub,
                 access_key_id: claims.access_key_id,
-                is_root,
+                is_root: claims.is_root,
             });
             next.run(req).await
         }
@@ -549,13 +552,22 @@ fn authorization_target(method: &Method, path: &str) -> (Action, Resource) {
     (Action::All, Resource::bucket(bucket))
 }
 
-/// Login request body.
+/// Login request body (access key authentication).
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
     /// Access key ID.
     pub access_key_id: String,
     /// Secret access key.
     pub secret_access_key: String,
+}
+
+/// Password login request body (username/password authentication).
+#[derive(Debug, Deserialize)]
+pub struct PasswordLoginRequest {
+    /// Username.
+    pub username: String,
+    /// Password.
+    pub password: String,
 }
 
 /// Login response body.

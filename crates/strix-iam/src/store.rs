@@ -289,8 +289,8 @@ fn init_iam_schema(conn: &Connection) -> rusqlite::Result<()> {
 #[async_trait]
 impl IamProvider for IamStore {
     async fn create_user(&self, username: &str) -> Result<User> {
-        if username == "root" {
-            return Err(IamError::UserExists("root".to_string()));
+        if username == "root" || username == self.root_access_key {
+            return Err(IamError::UserExists(username.to_string()));
         }
 
         let user = User::new(username.to_string());
@@ -323,7 +323,7 @@ impl IamProvider for IamStore {
     }
 
     async fn delete_user(&self, username: &str) -> Result<()> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Err(IamError::CannotDeleteRoot);
         }
 
@@ -348,8 +348,9 @@ impl IamProvider for IamStore {
     }
 
     async fn get_user(&self, username: &str) -> Result<User> {
-        if username == "root" {
-            return Ok(User::root());
+        // Check for root user (may be configured with custom username)
+        if username == "root" || username == self.root_access_key {
+            return Ok(User::root_with_username(&self.root_access_key));
         }
 
         let username = username.to_string();
@@ -417,6 +418,13 @@ impl IamProvider for IamStore {
     }
 
     async fn verify_user_password(&self, username: &str, password: &str) -> Result<bool> {
+        // Root user authenticates directly against the configured root password
+        // root_access_key holds the username from STRIX_ROOT_USER
+        // root_secret_key holds the password from STRIX_ROOT_PASSWORD
+        if username == self.root_access_key {
+            return Ok(password == self.root_secret_key);
+        }
+
         let user = self.get_user(username).await?;
 
         match user.password_hash {
@@ -454,7 +462,7 @@ impl IamProvider for IamStore {
     }
 
     async fn update_user_status(&self, username: &str, status: UserStatus) -> Result<()> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Err(IamError::CannotDeleteRoot);
         }
 
@@ -481,7 +489,7 @@ impl IamProvider for IamStore {
     }
 
     async fn create_access_key(&self, username: &str) -> Result<AccessKey> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Err(IamError::CannotModifyRootKeys);
         }
 
@@ -557,12 +565,12 @@ impl IamProvider for IamStore {
     }
 
     async fn list_access_keys(&self, username: &str) -> Result<Vec<AccessKey>> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             // Return the root access key (without secret)
             return Ok(vec![AccessKey {
                 access_key_id: self.root_access_key.clone(),
                 secret_access_key: None,
-                username: "root".to_string(),
+                username: self.root_access_key.clone(),
                 created_at: Utc::now(),
                 status: AccessKeyStatus::Active,
                 last_used: None,
@@ -819,7 +827,7 @@ impl IamProvider for IamStore {
     }
 
     async fn attach_user_policy(&self, username: &str, policy: &Policy) -> Result<()> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Ok(()); // Root always has full access
         }
 
@@ -868,7 +876,7 @@ impl IamProvider for IamStore {
     }
 
     async fn list_user_policies(&self, username: &str) -> Result<Vec<Policy>> {
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Ok(vec![crate::policy::admin_policy()]);
         }
 
@@ -898,7 +906,7 @@ impl IamProvider for IamStore {
         resource: &Resource,
     ) -> Result<bool> {
         // Root is always authorized
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Ok(true);
         }
 
@@ -932,7 +940,7 @@ impl IamProvider for IamStore {
         resource: &Resource,
     ) -> Result<AuthorizationResult> {
         // Root is always authorized
-        if username == "root" {
+        if username == "root" || username == self.root_access_key {
             return Ok(AuthorizationResult {
                 allowed: true,
                 effect: AuthorizationEffect::RootAccess,

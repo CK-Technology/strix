@@ -1,9 +1,13 @@
-# Docker Compose for Strix development and testing
+# Docker Compose for Strix
 #
 # Usage:
+#   cd deploy
 #   docker compose up -d          # Start Strix
 #   docker compose logs -f strix  # View logs
 #   docker compose down -v        # Stop and remove volumes
+#
+# With monitoring:
+#   docker compose --profile monitoring up -d
 #
 # Access:
 #   S3 API:       http://localhost:9000
@@ -12,18 +16,26 @@
 
 services:
   strix:
-    build: .
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: strix:latest
     container_name: strix
     restart: unless-stopped
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web Console & Admin API
-      - "9090:9090"   # Prometheus Metrics
+      - "${STRIX_PORT_S3:-9000}:9000"
+      - "${STRIX_PORT_CONSOLE:-9001}:9001"
+      - "${STRIX_PORT_METRICS:-9090}:9090"
     environment:
       STRIX_ROOT_USER: ${STRIX_ROOT_USER:-admin}
-      STRIX_ROOT_PASSWORD: ${STRIX_ROOT_PASSWORD:-password123}
+      STRIX_ROOT_PASSWORD: ${STRIX_ROOT_PASSWORD:?STRIX_ROOT_PASSWORD is required}
       STRIX_LOG_LEVEL: ${STRIX_LOG_LEVEL:-info}
       STRIX_LOG_JSON: ${STRIX_LOG_JSON:-false}
+      STRIX_JWT_SECRET: ${STRIX_JWT_SECRET:-}
+      STRIX_MULTIPART_EXPIRY_HOURS: ${STRIX_MULTIPART_EXPIRY_HOURS:-24}
+      STRIX_S3_RATE_LIMIT: ${STRIX_S3_RATE_LIMIT:-1000}
+      STRIX_OTLP_ENDPOINT: ${STRIX_OTLP_ENDPOINT:-}
+      STRIX_SERVICE_NAME: ${STRIX_SERVICE_NAME:-strix}
     volumes:
       - strix-data:/var/lib/strix
     healthcheck:
@@ -60,8 +72,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana-data:/var/lib/grafana

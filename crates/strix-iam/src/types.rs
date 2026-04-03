@@ -45,6 +45,18 @@ impl User {
             password_hash: None,
         }
     }
+
+    /// Create the root user with a custom username.
+    pub fn root_with_username(username: &str) -> Self {
+        Self {
+            username: username.to_string(),
+            arn: "arn:strix:iam::root".to_string(),
+            created_at: Utc::now(),
+            status: UserStatus::Active,
+            is_root: true,
+            password_hash: None,
+        }
+    }
 }
 
 /// Status of a user account.

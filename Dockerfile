@@ -6,33 +6,9 @@
 # Run:   docker run -p 9000:9000 -p 9001:9001 -e STRIX_ROOT_USER=admin -e STRIX_ROOT_PASSWORD=password strix
 
 # =============================================================================
-# Stage 1: Build the Rust binary
+# Stage 1: Build the GUI (WASM) - MUST BE FIRST
 # =============================================================================
-FROM rust:1.85-bookworm AS builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-
-# Copy workspace files
-COPY Cargo.toml Cargo.lock ./
-COPY strix/ strix/
-COPY crates/ crates/
-
-# Exclude GUI from workspace for server-only build
-# GUI is built separately with Trunk
-
-# Build release binary
-RUN cargo build --release -p strix
-
-# =============================================================================
-# Stage 2: Build the GUI (WASM)
-# =============================================================================
-FROM rust:1.85-bookworm AS gui-builder
+FROM rust:1.91.1-bookworm AS gui-builder
 
 # Install Trunk for building Leptos WASM apps
 RUN cargo install trunk
@@ -47,6 +23,31 @@ COPY crates/strix-core/ ./crates/strix-core/
 # Build GUI
 WORKDIR /build/crates/strix-gui
 RUN trunk build --release
+
+# =============================================================================
+# Stage 2: Build the Rust binary (after GUI so it can embed fresh assets)
+# =============================================================================
+FROM rust:1.91.1-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY strix/ strix/
+COPY crates/ crates/
+COPY tests/ tests/
+
+# Copy GUI dist from gui-builder so rust_embed can include it
+COPY --from=gui-builder /build/crates/strix-gui/dist/ ./crates/strix-gui/dist/
+
+# Build release binary (now with fresh GUI embedded)
+RUN cargo build --release -p strix
 
 # =============================================================================
 # Stage 3: Runtime image
