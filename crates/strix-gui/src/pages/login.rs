@@ -70,11 +70,13 @@ pub fn Login() -> impl IntoView {
             <div class="max-w-md w-full space-y-8">
                 <div>
                     <div class="flex justify-center">
-                        <svg class="h-16 w-16 text-strix-400" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
+                        <img
+                            src="/strix-web.png"
+                            alt="Strix"
+                            class="h-32 w-32"
+                        />
                     </div>
-                    <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
+                    <h2 class="mt-4 text-center text-3xl font-extrabold text-white">
                         "Sign in to "
                         <span class="text-strix-400">"STRIX"</span>
                     </h2>

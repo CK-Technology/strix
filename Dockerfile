@@ -24,6 +24,9 @@ COPY crates/strix-core/ ./crates/strix-core/
 WORKDIR /build/crates/strix-gui
 RUN trunk build --release
 
+# Ensure static files are copied to dist (Trunk hook may not work in Docker)
+RUN cp -r static/* dist/ 2>/dev/null || true
+
 # =============================================================================
 # Stage 2: Build the Rust binary (after GUI so it can embed fresh assets)
 # =============================================================================

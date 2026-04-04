@@ -34,9 +34,11 @@ pub fn Header() -> impl IntoView {
                         })}
 
                         <A href="/" attr:class="flex items-center">
-                            <svg class="h-8 w-8 text-strix-400" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                            </svg>
+                            <img
+                                src="/strix-web2.png"
+                                alt="Strix"
+                                class="h-10 w-10"
+                            />
                             <span class="ml-2 text-xl font-bold text-strix-400">"STRIX"</span>
                         </A>
                     </div>
