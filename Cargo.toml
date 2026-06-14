@@ -76,7 +76,7 @@ mime_guess = "2"
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }
-tokio-rusqlite = "0.6"
+tokio-rusqlite = "0.7"
 
 # Metrics
 metrics = "0.24"
