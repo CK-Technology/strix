@@ -5,13 +5,13 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use tokio_rusqlite::Connection as AsyncConnection;
 
+use crate::smtp::UsageReportSchedule;
 use crate::{
     AccessKey, AccessKeyStatus, Action, AssumeRoleRequest, AuthorizationEffect,
     AuthorizationResult, BucketPolicy, Effect, Group, IamError, IamProvider, OidcConfig, Policy,
     PolicySource, Principal, Resource, Result, SmtpConfig, TemporaryCredential, User, UserStatus,
     generate_access_key_id, generate_secret_key,
 };
-use crate::smtp::UsageReportSchedule;
 
 /// SQLite-backed IAM store.
 pub struct IamStore {
@@ -2068,7 +2068,9 @@ impl IamStore {
             .await
             .map_err(|e| IamError::Database(e.to_string()))?;
 
-        rows.into_iter().map(|r| self.raw_to_oidc_config(r)).collect()
+        rows.into_iter()
+            .map(|r| self.raw_to_oidc_config(r))
+            .collect()
     }
 
     /// Get a single OIDC provider by ID (secret decrypted), if present.
@@ -2215,8 +2217,7 @@ impl IamStore {
         let rows = self
             .db
             .call(move |conn| {
-                let rows =
-                    conn.execute("DELETE FROM oidc_providers WHERE id = ?1", params![id])?;
+                let rows = conn.execute("DELETE FROM oidc_providers WHERE id = ?1", params![id])?;
                 Ok(rows)
             })
             .await
@@ -2665,7 +2666,12 @@ mod oidc_provider_tests {
             .create_oidc_provider(&sample_provider("idp1"))
             .await
             .expect("create provider");
-        assert!(store.create_oidc_provider(&sample_provider("idp1")).await.is_err());
+        assert!(
+            store
+                .create_oidc_provider(&sample_provider("idp1"))
+                .await
+                .is_err()
+        );
     }
 }
 
@@ -2709,7 +2715,10 @@ mod smtp_config_tests {
     #[tokio::test]
     async fn set_get_roundtrip_hides_password() {
         let store = test_store().await;
-        store.set_smtp_config(&sample_config()).await.expect("set config");
+        store
+            .set_smtp_config(&sample_config())
+            .await
+            .expect("set config");
 
         let got = store
             .get_smtp_config()
@@ -2734,7 +2743,10 @@ mod smtp_config_tests {
     #[tokio::test]
     async fn with_secret_decrypts_password() {
         let store = test_store().await;
-        store.set_smtp_config(&sample_config()).await.expect("set config");
+        store
+            .set_smtp_config(&sample_config())
+            .await
+            .expect("set config");
 
         let got = store
             .get_smtp_config_with_secret()
@@ -2747,7 +2759,10 @@ mod smtp_config_tests {
     #[tokio::test]
     async fn password_is_encrypted_at_rest() {
         let store = test_store().await;
-        store.set_smtp_config(&sample_config()).await.expect("set config");
+        store
+            .set_smtp_config(&sample_config())
+            .await
+            .expect("set config");
 
         let stored: String = store
             .db
@@ -2768,19 +2783,21 @@ mod smtp_config_tests {
     #[tokio::test]
     async fn update_preserves_password_when_empty() {
         let store = test_store().await;
-        store.set_smtp_config(&sample_config()).await.expect("set config");
+        store
+            .set_smtp_config(&sample_config())
+            .await
+            .expect("set config");
 
         // Re-save with an empty password => existing secret preserved.
         let mut updated = sample_config();
         updated.host = "mail.example.net".to_string();
         updated.password = String::new();
-        store.set_smtp_config(&updated).await.expect("update config");
-
-        let got = store
-            .get_smtp_config_with_secret()
+        store
+            .set_smtp_config(&updated)
             .await
-            .unwrap()
-            .unwrap();
+            .expect("update config");
+
+        let got = store.get_smtp_config_with_secret().await.unwrap().unwrap();
         assert_eq!(got.host, "mail.example.net");
         assert_eq!(got.password, "relay-password");
     }
@@ -2788,17 +2805,19 @@ mod smtp_config_tests {
     #[tokio::test]
     async fn update_rewrites_password_when_present() {
         let store = test_store().await;
-        store.set_smtp_config(&sample_config()).await.expect("set config");
+        store
+            .set_smtp_config(&sample_config())
+            .await
+            .expect("set config");
 
         let mut updated = sample_config();
         updated.password = "new-password".to_string();
-        store.set_smtp_config(&updated).await.expect("update config");
-
-        let got = store
-            .get_smtp_config_with_secret()
+        store
+            .set_smtp_config(&updated)
             .await
-            .unwrap()
-            .unwrap();
+            .expect("update config");
+
+        let got = store.get_smtp_config_with_secret().await.unwrap().unwrap();
         assert_eq!(got.password, "new-password");
     }
 }

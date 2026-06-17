@@ -16,7 +16,7 @@ aws-smithy-runtime-api = "1"
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 # Testing utilities
-assert2 = "0.3"
+assert2 = "0.4"
 tempfile = "3"
 uuid = { workspace = true }
 

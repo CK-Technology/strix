@@ -21,9 +21,9 @@ use serde::{Deserialize, Serialize};
 
 use strix_iam::{IamProvider, OidcClient, OidcConfig};
 
+use crate::ErrorResponse;
 use crate::auth::AuthenticatedUser;
 use crate::handlers::AdminState;
-use crate::ErrorResponse;
 
 /// How long an in-flight OIDC authorization request remains valid.
 const FLOW_TTL: Duration = Duration::from_secs(600);
@@ -84,7 +84,7 @@ pub struct AuthProvidersResponse {
 
 /// Generate a URL-safe random token for `state`/`nonce`.
 fn random_token() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::rng();
     (0..32)
@@ -107,10 +107,7 @@ fn redirect_to(location: String) -> Response {
 
 /// Redirect the browser back to the console login page with an SSO error.
 fn redirect_error(message: &str) -> Response {
-    redirect_to(format!(
-        "/login?sso_error={}",
-        urlencoding::encode(message)
-    ))
+    redirect_to(format!("/login?sso_error={}", urlencoding::encode(message)))
 }
 
 /// `GET /auth/providers` — list enabled providers for login buttons.
@@ -244,7 +241,10 @@ pub async fn auth_callback(
     let username = auth.username.clone();
     if state.iam.get_user(&username).await.is_err() {
         if !config.auto_create_users {
-            tracing::warn!("OIDC user '{}' not provisioned and auto-create disabled", username);
+            tracing::warn!(
+                "OIDC user '{}' not provisioned and auto-create disabled",
+                username
+            );
             return redirect_error("Your account is not provisioned for SSO");
         }
         if let Err(e) = state.iam.create_user(&username).await {
@@ -403,7 +403,11 @@ fn forbidden() -> Response {
 }
 
 fn bad_request(msg: impl Into<String>) -> Response {
-    (StatusCode::BAD_REQUEST, Json(ErrorResponse::new(msg.into()))).into_response()
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse::new(msg.into())),
+    )
+        .into_response()
 }
 
 /// `GET /admin/oidc/providers` — list providers (root-only, secrets omitted).
@@ -464,7 +468,13 @@ pub async fn create_oidc_provider_admin(
     if req.id.trim().is_empty() {
         return bad_request("Provider id is required");
     }
-    if req.config.client_secret.as_deref().unwrap_or_default().is_empty() {
+    if req
+        .config
+        .client_secret
+        .as_deref()
+        .unwrap_or_default()
+        .is_empty()
+    {
         return bad_request("Client secret is required when creating a provider");
     }
     let config = req.config.into_config(req.id);

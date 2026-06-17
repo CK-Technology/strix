@@ -8,7 +8,7 @@ use aes_gcm::{
 };
 use hmac::{Hmac, Mac};
 use md5::{Digest as Md5Digest, Md5};
-use rand::Rng;
+use rand::RngExt;
 use sha2::Sha256;
 
 /// AES-GCM nonce size (96 bits / 12 bytes)
@@ -52,7 +52,8 @@ pub fn md5_base64(data: &[u8]) -> String {
 /// Compute HMAC-SHA256.
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     type HmacSha256 = Hmac<Sha256>;
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
+    let mut mac =
+        <HmacSha256 as hmac::KeyInit>::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);
     mac.finalize().into_bytes().into()
 }

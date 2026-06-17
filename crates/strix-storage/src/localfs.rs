@@ -32,11 +32,11 @@ use strix_core::{
     CorsConfiguration, CreateBucketOpts, DeleteObjectResponse, DeliveryQueryOpts, DeliveryStatus,
     EncryptionInfo, Error, GetObjectOpts, GetObjectResponse, LegalHoldStatus,
     LifecycleConfiguration, ListObjectsOpts, ListObjectsResponse, ListPartsOpts, ListPartsResponse,
-    ListUploadsOpts, ListUploadsResponse, ListVersionsOpts, ListVersionsResponse, MetadataDirective,
-    MultipartUpload, NotificationConfiguration, NotificationDeliveryAttempt, ObjectBody, ObjectInfo,
-    ObjectLockConfiguration, ObjectRetention, ObjectStore, ObjectVersion, PartInfo, PutObjectOpts,
-    PutObjectResponse, Result, RetentionMode, ServerSideEncryption, StorageClass,
-    TaggingConfiguration, TenantInfo,
+    ListUploadsOpts, ListUploadsResponse, ListVersionsOpts, ListVersionsResponse,
+    MetadataDirective, MultipartUpload, NotificationConfiguration, NotificationDeliveryAttempt,
+    ObjectBody, ObjectInfo, ObjectLockConfiguration, ObjectRetention, ObjectStore, ObjectVersion,
+    PartInfo, PutObjectOpts, PutObjectResponse, Result, RetentionMode, ServerSideEncryption,
+    StorageClass, TaggingConfiguration, TenantInfo,
 };
 use strix_crypto::{
     KEY_SIZE, decrypt_aes256_gcm, derive_key, encrypt_aes256_gcm, format_etag,
@@ -1152,7 +1152,7 @@ impl ObjectStore for LocalFsStore {
             Vec::new() // Not used for non-encrypted objects
         };
 
-        let etag = format_etag(&format!("{:x}", hasher.finalize()));
+        let etag = format_etag(&hex::encode(hasher.finalize()));
         let original_size = total_size;
 
         // Determine encryption settings and handle file appropriately
@@ -1903,7 +1903,7 @@ impl ObjectStore for LocalFsStore {
         file.flush().await?;
         file.sync_all().await?;
 
-        let etag = format_etag(&format!("{:x}", hasher.finalize()));
+        let etag = format_etag(&hex::encode(hasher.finalize()));
         let now = Utc::now();
 
         let upload_id = upload.upload_id.clone();

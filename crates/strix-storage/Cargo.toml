@@ -28,5 +28,6 @@ bytes.workspace = true
 uuid.workspace = true
 ulid.workspace = true
 md-5.workspace = true
+hex.workspace = true
 parking_lot.workspace = true
 dashmap.workspace = true

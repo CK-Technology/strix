@@ -28,11 +28,10 @@ use crate::{
     CreateBucketRequest, CreateGroupRequest, CreateNotificationRuleRequest, CreatePolicyRequest,
     CreateTenantRequest, CreateUserRequest, CreateUserResponse, DeleteObjectsRequest,
     DeliveryAttemptResponse, DeliveryLogQuery, ErrorResponse, GetVersioningResponse, GroupInfo,
-    ListAuditLogResponse, ListDeliveriesResponse,
-    ListBucketNotificationsResponse, ListObjectsResponse, NotificationRuleInfo, ObjectInfo,
-    PolicyInfo, PresignRequest, PresignResponse, ServerConfigInfo, ServerInfo,
-    SetVersioningRequest, StorageUsageResponse, TenantFilterQuery, TenantInfoResponse,
-    UpdateAccessKeyRequest, UserInfo,
+    ListAuditLogResponse, ListBucketNotificationsResponse, ListDeliveriesResponse,
+    ListObjectsResponse, NotificationRuleInfo, ObjectInfo, PolicyInfo, PresignRequest,
+    PresignResponse, ServerConfigInfo, ServerInfo, SetVersioningRequest, StorageUsageResponse,
+    TenantFilterQuery, TenantInfoResponse, UpdateAccessKeyRequest, UserInfo,
 };
 
 fn bucket_visible_for_tenant(
@@ -2031,7 +2030,10 @@ pub async fn query_notification_deliveries(
 
     let limit = query.limit.unwrap_or(100);
     let offset = query.offset.unwrap_or(0);
-    let status = query.status.as_deref().and_then(|s| s.parse::<DeliveryStatus>().ok());
+    let status = query
+        .status
+        .as_deref()
+        .and_then(|s| s.parse::<DeliveryStatus>().ok());
 
     let opts = DeliveryQueryOpts {
         bucket: query.bucket,

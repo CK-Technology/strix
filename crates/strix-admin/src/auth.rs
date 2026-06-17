@@ -50,7 +50,7 @@ pub struct SessionConfig {
 impl SessionConfig {
     /// Create a new session config with a random secret.
     pub fn new(expiry: Duration) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
         let mut secret = [0u8; 32];
         rand::rng().fill(&mut secret);
         Self {

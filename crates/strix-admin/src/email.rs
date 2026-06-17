@@ -8,8 +8,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use lettre::message::header::ContentType;
 use lettre::message::Mailbox;
+use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Address, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
@@ -256,14 +256,20 @@ impl EmailService {
             return true;
         }
         let op = entry.operation.as_str();
-        let is_mutation =
-            op.contains("POST ") || op.contains("PUT ") || op.contains("DELETE ");
+        let is_mutation = op.contains("POST ") || op.contains("PUT ") || op.contains("DELETE ");
         if !is_mutation {
             return false;
         }
-        ["/users", "/groups", "/policies", "/access-keys", "/oidc", "/smtp"]
-            .iter()
-            .any(|seg| op.contains(seg))
+        [
+            "/users",
+            "/groups",
+            "/policies",
+            "/access-keys",
+            "/oidc",
+            "/smtp",
+        ]
+        .iter()
+        .any(|seg| op.contains(seg))
     }
 }
 
@@ -303,9 +309,13 @@ impl DeliveryFailureAlerter for EmailService {
             attempt.timestamp.to_rfc3339(),
         );
         let recipients = Self::recipients(&config, None);
-        if let Err(e) =
-            Self::send_with(&config, &recipients, "Strix notification delivery failure", &body)
-                .await
+        if let Err(e) = Self::send_with(
+            &config,
+            &recipients,
+            "Strix notification delivery failure",
+            &body,
+        )
+        .await
         {
             tracing::warn!("Failed to send delivery-failure alert email: {}", e);
         }

@@ -160,14 +160,12 @@ impl OidcClient {
             None => return Err(IamError::Oidc("id_token missing nonce".to_string())),
         }
 
-        let username = claims
-            .get_username(&config.username_claim)
-            .ok_or_else(|| {
-                IamError::Oidc(format!(
-                    "claim '{}' not present in id_token",
-                    config.username_claim
-                ))
-            })?;
+        let username = claims.get_username(&config.username_claim).ok_or_else(|| {
+            IamError::Oidc(format!(
+                "claim '{}' not present in id_token",
+                config.username_claim
+            ))
+        })?;
 
         let expires_at = token
             .expires_in
@@ -236,10 +234,7 @@ fn verify_id_token_with_jwks(
             .find(|k| k.kid.as_deref() == Some(kid.as_str()))
             .ok_or_else(|| IamError::Oidc(format!("no JWKS key matches kid '{kid}'")))?,
         None => {
-            let mut rsa_keys = jwks
-                .keys
-                .iter()
-                .filter(|k| k.kty.as_deref() == Some("RSA"));
+            let mut rsa_keys = jwks.keys.iter().filter(|k| k.kty.as_deref() == Some("RSA"));
             let first = rsa_keys
                 .next()
                 .ok_or_else(|| IamError::Oidc("JWKS contains no RSA keys".to_string()))?;
@@ -363,13 +358,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
     fn verifies_valid_token() {
         let token = sign_token(Some("key-1"), &valid_claims());
         let jwks = jwks_with_kid(Some("key-1"));
-        let claims = verify_id_token_with_jwks(
-            &token,
-            "strix-console",
-            "https://idp.example.com",
-            &jwks,
-        )
-        .expect("valid token verifies");
+        let claims =
+            verify_id_token_with_jwks(&token, "strix-console", "https://idp.example.com", &jwks)
+                .expect("valid token verifies");
         assert_eq!(claims.sub, "user-123");
         assert_eq!(claims.preferred_username.as_deref(), Some("alice"));
         assert_eq!(claims.nonce.as_deref(), Some("test-nonce"));
@@ -379,13 +370,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
     fn rejects_wrong_audience() {
         let token = sign_token(Some("key-1"), &valid_claims());
         let jwks = jwks_with_kid(Some("key-1"));
-        let err = verify_id_token_with_jwks(
-            &token,
-            "other-client",
-            "https://idp.example.com",
-            &jwks,
-        )
-        .unwrap_err();
+        let err =
+            verify_id_token_with_jwks(&token, "other-client", "https://idp.example.com", &jwks)
+                .unwrap_err();
         assert!(matches!(err, IamError::Oidc(_)));
     }
 
@@ -393,13 +380,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
     fn rejects_wrong_issuer() {
         let token = sign_token(Some("key-1"), &valid_claims());
         let jwks = jwks_with_kid(Some("key-1"));
-        let err = verify_id_token_with_jwks(
-            &token,
-            "strix-console",
-            "https://evil.example.com",
-            &jwks,
-        )
-        .unwrap_err();
+        let err =
+            verify_id_token_with_jwks(&token, "strix-console", "https://evil.example.com", &jwks)
+                .unwrap_err();
         assert!(matches!(err, IamError::Oidc(_)));
     }
 
@@ -407,13 +390,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
     fn rejects_unknown_kid() {
         let token = sign_token(Some("unknown-kid"), &valid_claims());
         let jwks = jwks_with_kid(Some("key-1"));
-        let err = verify_id_token_with_jwks(
-            &token,
-            "strix-console",
-            "https://idp.example.com",
-            &jwks,
-        )
-        .unwrap_err();
+        let err =
+            verify_id_token_with_jwks(&token, "strix-console", "https://idp.example.com", &jwks)
+                .unwrap_err();
         assert!(matches!(err, IamError::Oidc(_)));
     }
 
@@ -429,13 +408,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
         });
         let token = sign_token(Some("key-1"), &claims);
         let jwks = jwks_with_kid(Some("key-1"));
-        let err = verify_id_token_with_jwks(
-            &token,
-            "strix-console",
-            "https://idp.example.com",
-            &jwks,
-        )
-        .unwrap_err();
+        let err =
+            verify_id_token_with_jwks(&token, "strix-console", "https://idp.example.com", &jwks)
+                .unwrap_err();
         assert!(matches!(err, IamError::Oidc(_)));
     }
 
@@ -443,13 +418,9 @@ a9mbRDnfRYHvs15YK9lB29w=\n\
     fn selects_sole_key_without_kid() {
         let token = sign_token(None, &valid_claims());
         let jwks = jwks_with_kid(None);
-        let claims = verify_id_token_with_jwks(
-            &token,
-            "strix-console",
-            "https://idp.example.com",
-            &jwks,
-        )
-        .expect("sole RSA key is selected when kid absent");
+        let claims =
+            verify_id_token_with_jwks(&token, "strix-console", "https://idp.example.com", &jwks)
+                .expect("sole RSA key is selected when kid absent");
         assert_eq!(claims.sub, "user-123");
     }
 }

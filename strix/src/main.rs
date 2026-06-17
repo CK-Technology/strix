@@ -40,7 +40,9 @@ use strix_admin::{
     AdminState, CsrfConfig, EmailService, OidcState, PresignConfig, RateLimiter, admin_router,
 };
 use strix_iam::{IamProvider, IamStore, OidcConfig, SmtpConfig};
-use strix_s3::{DispatcherConfig, IamAuth, S3BodyStream, SimpleAuthProvider, StrixS3Service, start_dispatcher};
+use strix_s3::{
+    DispatcherConfig, IamAuth, S3BodyStream, SimpleAuthProvider, StrixS3Service, start_dispatcher,
+};
 use strix_storage::{CleanupConfig, LocalFsStore, start_cleanup_task};
 
 /// State for health check endpoints.
@@ -196,7 +198,11 @@ struct Config {
     oidc_redirect_uri: Option<String>,
 
     /// OIDC scopes (space-separated). Defaults to "openid email profile".
-    #[arg(long, default_value = "openid email profile", env = "STRIX_OIDC_SCOPES")]
+    #[arg(
+        long,
+        default_value = "openid email profile",
+        env = "STRIX_OIDC_SCOPES"
+    )]
     oidc_scopes: String,
 
     /// Auto-create users on first OIDC login.
@@ -352,14 +358,18 @@ fn build_env_oidc_provider(config: &Config) -> Option<OidcConfig> {
     }
 
     let preset = config.oidc_provider.to_lowercase();
-    let issuer = config.oidc_issuer.clone().unwrap_or_else(|| match preset.as_str() {
-        "google" => "https://accounts.google.com".to_string(),
-        _ => String::new(),
-    });
+    let issuer = config
+        .oidc_issuer
+        .clone()
+        .unwrap_or_else(|| match preset.as_str() {
+            "google" => "https://accounts.google.com".to_string(),
+            _ => String::new(),
+        });
 
-    let (Some(client_id), Some(client_secret)) =
-        (config.oidc_client_id.clone(), config.oidc_client_secret.clone())
-    else {
+    let (Some(client_id), Some(client_secret)) = (
+        config.oidc_client_id.clone(),
+        config.oidc_client_secret.clone(),
+    ) else {
         warn!("STRIX_OIDC_ENABLED set but client ID/secret missing; SSO disabled");
         return None;
     };
@@ -369,9 +379,10 @@ fn build_env_oidc_provider(config: &Config) -> Option<OidcConfig> {
         return None;
     }
 
-    let redirect_uri = config.oidc_redirect_uri.clone().unwrap_or_else(|| {
-        format!("http://{}/api/v1/auth/callback", config.console_address)
-    });
+    let redirect_uri = config
+        .oidc_redirect_uri
+        .clone()
+        .unwrap_or_else(|| format!("http://{}/api/v1/auth/callback", config.console_address));
 
     let scopes: Vec<String> = config
         .oidc_scopes

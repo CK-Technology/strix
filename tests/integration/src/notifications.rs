@@ -82,7 +82,10 @@ fn put_event(bucket: &str, key: &str) -> S3Event {
 }
 
 /// Wait until at least `n` delivery records exist (or time out).
-async fn wait_for_deliveries(store: &Arc<LocalFsStore>, n: usize) -> Vec<strix_core::NotificationDeliveryAttempt> {
+async fn wait_for_deliveries(
+    store: &Arc<LocalFsStore>,
+    n: usize,
+) -> Vec<strix_core::NotificationDeliveryAttempt> {
     for _ in 0..100 {
         let records = store
             .query_notification_deliveries(DeliveryQueryOpts::default())
@@ -105,7 +108,13 @@ async fn setup_rule(
     rule: NotificationRule,
 ) -> EventSender {
     store
-        .create_bucket(bucket, CreateBucketOpts { region: None, tenant_slug: None })
+        .create_bucket(
+            bucket,
+            CreateBucketOpts {
+                region: None,
+                tenant_slug: None,
+            },
+        )
         .await
         .unwrap();
     store
@@ -172,7 +181,11 @@ async fn prefix_filter_suppresses_non_matching_keys() {
     sender.emit(put_event("filtered-bucket", "logs/app.json"));
 
     let records = wait_for_deliveries(&store, 1).await;
-    assert_eq!(records.len(), 1, "only the matching key should be delivered");
+    assert_eq!(
+        records.len(),
+        1,
+        "only the matching key should be delivered"
+    );
     assert_eq!(records[0].object_key, "logs/app.json");
     assert_eq!(hits.load(Ordering::SeqCst), 1);
 }
@@ -204,7 +217,11 @@ async fn non_2xx_response_is_retried_and_recorded_failed() {
     assert_eq!(r.attempts, 3);
     assert_eq!(r.response_code, Some(500));
     assert!(r.last_error.is_some());
-    assert_eq!(hits.load(Ordering::SeqCst), 3, "all attempts should hit the server");
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        3,
+        "all attempts should hit the server"
+    );
 }
 
 #[tokio::test]

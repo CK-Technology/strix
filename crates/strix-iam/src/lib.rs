@@ -244,7 +244,7 @@ pub trait IamProvider: Send + Sync {
 
 /// Generate a random access key ID (20 characters, like AWS).
 pub fn generate_access_key_id() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::rng();
     (0..20)
@@ -257,7 +257,7 @@ pub fn generate_access_key_id() -> String {
 
 /// Generate a random secret access key (40 characters, like AWS).
 pub fn generate_secret_key() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut rng = rand::rng();
     (0..40)
@@ -270,7 +270,7 @@ pub fn generate_secret_key() -> String {
 
 /// Generate a random session token (256 characters for STS temporary credentials).
 pub fn generate_session_token() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let mut rng = rand::rng();
     (0..256)
@@ -283,7 +283,7 @@ pub fn generate_session_token() -> String {
 
 /// Generate a temporary access key ID (prefixed with ASIA like AWS).
 pub fn generate_temp_access_key_id() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::rng();
     let suffix: String = (0..16)

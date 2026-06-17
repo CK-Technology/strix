@@ -169,7 +169,11 @@ pub fn start_dispatcher(
                     last_error: outcome.last_error,
                 };
                 let needs_alert = attempt.status != DeliveryStatus::Success;
-                let alert_copy = if needs_alert { Some(attempt.clone()) } else { None };
+                let alert_copy = if needs_alert {
+                    Some(attempt.clone())
+                } else {
+                    None
+                };
 
                 if let Err(e) = store.log_notification_delivery(attempt).await {
                     warn!(
@@ -196,13 +200,22 @@ fn matches_rule(rule: &NotificationRule, event: &S3Event) -> bool {
             || matches!(
                 (re, &event.event_type),
                 (S3EventType::ObjectCreatedAll, S3EventType::ObjectCreatedPut)
-                    | (S3EventType::ObjectCreatedAll, S3EventType::ObjectCreatedPost)
-                    | (S3EventType::ObjectCreatedAll, S3EventType::ObjectCreatedCopy)
+                    | (
+                        S3EventType::ObjectCreatedAll,
+                        S3EventType::ObjectCreatedPost
+                    )
+                    | (
+                        S3EventType::ObjectCreatedAll,
+                        S3EventType::ObjectCreatedCopy
+                    )
                     | (
                         S3EventType::ObjectCreatedAll,
                         S3EventType::ObjectCreatedCompleteMultipartUpload
                     )
-                    | (S3EventType::ObjectRemovedAll, S3EventType::ObjectRemovedDelete)
+                    | (
+                        S3EventType::ObjectRemovedAll,
+                        S3EventType::ObjectRemovedDelete
+                    )
                     | (
                         S3EventType::ObjectRemovedAll,
                         S3EventType::ObjectRemovedDeleteMarkerCreated
@@ -251,9 +264,7 @@ fn describe_destination(dest: &NotificationDestination) -> (&'static str, String
         NotificationDestination::Kafka { brokers, topic } => {
             ("kafka", format!("{}/{}", brokers.join(","), topic))
         }
-        NotificationDestination::Redis { url, channel } => {
-            ("redis", format!("{url}/{channel}"))
-        }
+        NotificationDestination::Redis { url, channel } => ("redis", format!("{url}/{channel}")),
     }
 }
 

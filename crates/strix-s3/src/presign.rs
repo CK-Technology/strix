@@ -1,7 +1,7 @@
 //! Pre-signed URL generation for S3 operations.
 
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
