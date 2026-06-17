@@ -61,7 +61,7 @@ chrono = { version = "0.4", features = ["serde"] }
 time = "0.3"
 
 # JWT and Auth
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 
 # HTTP Client
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
