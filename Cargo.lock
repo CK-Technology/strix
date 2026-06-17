@@ -3614,7 +3614,7 @@ dependencies = [
  "hmac 0.12.1",
  "md-5 0.10.6",
  "rand 0.9.4",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -3632,7 +3632,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "strix-core",
  "strix-crypto",
  "thiserror 2.0.18",
@@ -3686,7 +3686,7 @@ dependencies = [
  "s3s",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "strix-core",
  "strix-crypto",
  "strix-iam",
