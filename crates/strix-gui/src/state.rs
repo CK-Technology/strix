@@ -29,6 +29,13 @@ const SESSION_KEY: &str = "strix_session";
 impl AppState {
     /// Create a new app state, restoring from session storage if available.
     pub fn new() -> Self {
+        // If we arrived via an SSO redirect, the token is delivered in the URL
+        // fragment (e.g. `/#token=<jwt>&user=<name>`). Capture it, persist a
+        // session, and clean the fragment before continuing.
+        if let Some(session) = take_sso_fragment_session() {
+            let _ = SessionStorage::set(SESSION_KEY, &session);
+        }
+
         let stored_session: Option<StoredSession> = SessionStorage::get(SESSION_KEY).ok();
 
         let is_authenticated = RwSignal::new(stored_session.is_some());
@@ -191,6 +198,53 @@ struct StoredSession {
     username: String,
     /// JWT token (expires automatically, no raw secrets stored).
     token: String,
+}
+
+/// Extract an SSO session from the URL fragment, if present, and clear it.
+///
+/// SSO callbacks redirect to `/#token=<jwt>&user=<name>`. We read those values
+/// then strip the fragment via `history.replaceState` so the token does not
+/// linger in the address bar or get re-applied on reload.
+fn take_sso_fragment_session() -> Option<StoredSession> {
+    let window = web_sys::window()?;
+    let hash = window.location().hash().ok()?;
+    let fragment = hash.strip_prefix('#').unwrap_or(&hash);
+    if fragment.is_empty() {
+        return None;
+    }
+
+    let mut token: Option<String> = None;
+    let mut user: Option<String> = None;
+    for pair in fragment.split('&') {
+        if let Some((key, value)) = pair.split_once('=') {
+            let decoded = decode_uri_component(value);
+            match key {
+                "token" => token = Some(decoded),
+                "user" => user = Some(decoded),
+                _ => {}
+            }
+        }
+    }
+
+    let token = token?;
+    let username = user.unwrap_or_default();
+
+    // Strip the fragment from the URL without triggering navigation.
+    if let Ok(history) = window.history() {
+        if let Ok(path) = window.location().pathname() {
+            let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&path));
+        }
+    }
+
+    Some(StoredSession { username, token })
+}
+
+/// Decode a URI-component-encoded string, falling back to the raw value.
+fn decode_uri_component(value: &str) -> String {
+    js_sys::decode_uri_component(value)
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| value.to_string())
 }
 
 /// A toast notification.

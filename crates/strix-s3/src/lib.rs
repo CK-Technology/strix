@@ -4,6 +4,7 @@
 //! bridging S3 requests to the storage backend.
 
 mod auth;
+mod dispatcher;
 mod error;
 mod iam_auth;
 mod presign;
@@ -11,6 +12,7 @@ mod service;
 mod stream;
 
 pub use auth::{AuthProvider, SimpleAuthProvider};
+pub use dispatcher::{DispatcherConfig, EventSender, S3Event, start_dispatcher};
 pub use iam_auth::IamAuth;
 pub use presign::{PresignMethod, PresignOptions, PresignUrlGenerator};
 pub use service::{RequestAuditContext, StrixS3Service};

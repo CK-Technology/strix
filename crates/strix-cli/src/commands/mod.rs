@@ -172,6 +172,8 @@ pub enum EventCommands {
     Add(event::AddArgs),
     /// Remove an event notification
     Remove(event::RemoveArgs),
+    /// Show recent notification delivery attempts (webhook diagnostics)
+    Deliveries(event::DeliveriesArgs),
 }
 
 #[derive(Subcommand)]

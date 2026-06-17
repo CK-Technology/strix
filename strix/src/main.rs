@@ -36,9 +36,11 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use metrics_exporter_prometheus::PrometheusHandle;
-use strix_admin::{AdminState, CsrfConfig, PresignConfig, RateLimiter, admin_router};
-use strix_iam::{IamProvider, IamStore};
-use strix_s3::{IamAuth, S3BodyStream, SimpleAuthProvider, StrixS3Service};
+use strix_admin::{
+    AdminState, CsrfConfig, EmailService, OidcState, PresignConfig, RateLimiter, admin_router,
+};
+use strix_iam::{IamProvider, IamStore, OidcConfig, SmtpConfig};
+use strix_s3::{DispatcherConfig, IamAuth, S3BodyStream, SimpleAuthProvider, StrixS3Service, start_dispatcher};
 use strix_storage::{CleanupConfig, LocalFsStore, start_cleanup_task};
 
 /// State for health check endpoints.
@@ -168,6 +170,58 @@ struct Config {
     /// Stable JWT signing secret (base64, 32+ bytes decoded). If unset, random per-process secret is used.
     #[arg(long, env = "STRIX_JWT_SECRET")]
     jwt_secret: Option<String>,
+
+    /// Enable OIDC/SSO login.
+    #[arg(long, env = "STRIX_OIDC_ENABLED")]
+    oidc_enabled: bool,
+
+    /// OIDC provider preset: "azure", "google", or "generic".
+    #[arg(long, default_value = "generic", env = "STRIX_OIDC_PROVIDER")]
+    oidc_provider: String,
+
+    /// OIDC issuer URL (e.g. https://accounts.google.com).
+    #[arg(long, env = "STRIX_OIDC_ISSUER")]
+    oidc_issuer: Option<String>,
+
+    /// OIDC client ID.
+    #[arg(long, env = "STRIX_OIDC_CLIENT_ID")]
+    oidc_client_id: Option<String>,
+
+    /// OIDC client secret.
+    #[arg(long, env = "STRIX_OIDC_CLIENT_SECRET")]
+    oidc_client_secret: Option<String>,
+
+    /// OIDC redirect URI. Defaults to http://<console>/api/v1/auth/callback.
+    #[arg(long, env = "STRIX_OIDC_REDIRECT_URI")]
+    oidc_redirect_uri: Option<String>,
+
+    /// OIDC scopes (space-separated). Defaults to "openid email profile".
+    #[arg(long, default_value = "openid email profile", env = "STRIX_OIDC_SCOPES")]
+    oidc_scopes: String,
+
+    /// Auto-create users on first OIDC login.
+    #[arg(long, default_value = "true", env = "STRIX_OIDC_AUTO_CREATE")]
+    oidc_auto_create: bool,
+
+    /// SMTP relay host for outbound email (alerts and reports).
+    #[arg(long, env = "STRIX_SMTP_HOST")]
+    smtp_host: Option<String>,
+
+    /// SMTP relay port (default 587 for STARTTLS).
+    #[arg(long, default_value = "587", env = "STRIX_SMTP_PORT")]
+    smtp_port: u16,
+
+    /// SMTP username.
+    #[arg(long, env = "STRIX_SMTP_USER")]
+    smtp_user: Option<String>,
+
+    /// SMTP password.
+    #[arg(long, env = "STRIX_SMTP_PASS")]
+    smtp_pass: Option<String>,
+
+    /// From address for outbound email.
+    #[arg(long, env = "STRIX_SMTP_FROM")]
+    smtp_from: Option<String>,
 }
 
 impl Config {
@@ -225,8 +279,12 @@ impl Config {
     }
 
     fn jwt_secret_bytes(&self) -> anyhow::Result<Option<[u8; 32]>> {
-        let Some(secret) = &self.jwt_secret else {
-            return Ok(None);
+        // Treat an empty/whitespace value the same as unset. Docker Compose and
+        // shell `export` commonly pass empty strings for optional variables, and
+        // an empty secret should fall back to an ephemeral key rather than abort.
+        let secret = match &self.jwt_secret {
+            Some(s) if !s.trim().is_empty() => s.trim(),
+            _ => return Ok(None),
         };
 
         let decoded = base64::engine::general_purpose::STANDARD
@@ -280,6 +338,160 @@ impl Config {
 
         Ok(())
     }
+}
+
+/// Build an OIDC provider from environment configuration (env seed).
+///
+/// Returns `None` unless `STRIX_OIDC_ENABLED` is set with a valid issuer, client
+/// ID, and client secret. The provider preset supplies sensible defaults for the
+/// username/groups claims. The returned config is used to seed the database on
+/// first boot; thereafter providers are managed via the console.
+fn build_env_oidc_provider(config: &Config) -> Option<OidcConfig> {
+    if !config.oidc_enabled {
+        return None;
+    }
+
+    let preset = config.oidc_provider.to_lowercase();
+    let issuer = config.oidc_issuer.clone().unwrap_or_else(|| match preset.as_str() {
+        "google" => "https://accounts.google.com".to_string(),
+        _ => String::new(),
+    });
+
+    let (Some(client_id), Some(client_secret)) =
+        (config.oidc_client_id.clone(), config.oidc_client_secret.clone())
+    else {
+        warn!("STRIX_OIDC_ENABLED set but client ID/secret missing; SSO disabled");
+        return None;
+    };
+
+    if issuer.is_empty() {
+        warn!("STRIX_OIDC_ENABLED set but issuer missing; SSO disabled");
+        return None;
+    }
+
+    let redirect_uri = config.oidc_redirect_uri.clone().unwrap_or_else(|| {
+        format!("http://{}/api/v1/auth/callback", config.console_address)
+    });
+
+    let scopes: Vec<String> = config
+        .oidc_scopes
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+
+    let (name, username_claim, groups_claim) = match preset.as_str() {
+        "azure" => (
+            "Azure AD".to_string(),
+            "preferred_username".to_string(),
+            Some("groups".to_string()),
+        ),
+        "google" => ("Google".to_string(), "email".to_string(), None),
+        _ => ("SSO".to_string(), "preferred_username".to_string(), None),
+    };
+
+    Some(OidcConfig {
+        id: preset,
+        name,
+        enabled: true,
+        issuer_url: issuer,
+        client_id,
+        client_secret,
+        redirect_uri,
+        scopes,
+        username_claim,
+        groups_claim,
+        auto_create_users: config.oidc_auto_create,
+        default_policy: None,
+        group_policy_mappings: std::collections::HashMap::new(),
+    })
+}
+
+/// Seed the OIDC provider table from environment on first boot.
+///
+/// Only inserts when SSO is env-configured and no providers exist yet, so the
+/// console remains the source of truth once any provider has been created.
+async fn seed_oidc_provider(iam: &IamStore, config: &Config) {
+    let Some(provider) = build_env_oidc_provider(config) else {
+        return;
+    };
+    match iam.count_oidc_providers().await {
+        Ok(0) => match iam.create_oidc_provider(&provider).await {
+            Ok(()) => info!(
+                "OIDC/SSO seeded from environment: provider '{}' ({})",
+                provider.id, provider.issuer_url
+            ),
+            Err(e) => warn!("Failed to seed OIDC provider from environment: {}", e),
+        },
+        Ok(_) => info!("OIDC providers already configured; skipping environment seed"),
+        Err(e) => warn!("Failed to count OIDC providers for seeding: {}", e),
+    }
+}
+
+/// Seed the SMTP relay configuration from environment on first boot.
+///
+/// Only inserts when host/user/pass/from are env-provided and no configuration
+/// exists yet, so the console remains the source of truth thereafter.
+async fn seed_smtp_config(iam: &IamStore, config: &Config) {
+    let (Some(host), Some(user), Some(pass), Some(from)) = (
+        config.smtp_host.clone(),
+        config.smtp_user.clone(),
+        config.smtp_pass.clone(),
+        config.smtp_from.clone(),
+    ) else {
+        return;
+    };
+
+    match iam.get_smtp_config().await {
+        Ok(Some(_)) => info!("SMTP already configured; skipping environment seed"),
+        Ok(None) => {
+            let smtp = SmtpConfig {
+                enabled: true,
+                host,
+                port: config.smtp_port,
+                username: user,
+                password: pass,
+                from_address: from,
+                use_starttls: config.smtp_port != 465,
+                ..SmtpConfig::default()
+            };
+            match iam.set_smtp_config(&smtp).await {
+                Ok(()) => info!(
+                    "SMTP relay seeded from environment: {}:{}",
+                    smtp.host, smtp.port
+                ),
+                Err(e) => warn!("Failed to seed SMTP config from environment: {}", e),
+            }
+        }
+        Err(e) => warn!("Failed to read SMTP config for seeding: {}", e),
+    }
+}
+
+/// Periodically send storage usage reports when enabled in the SMTP config.
+///
+/// Checks hourly and emits a report once the configured interval (daily/weekly)
+/// has elapsed. The "last sent" marker starts at process boot, so the first
+/// report is delayed by one full interval after startup.
+fn start_usage_report_task(email: Arc<EmailService>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(Duration::from_secs(3600));
+        ticker.tick().await; // consume the immediate first tick
+        let mut last_sent = tokio::time::Instant::now();
+        loop {
+            ticker.tick().await;
+            let Some(interval) = email.usage_report_interval().await else {
+                continue;
+            };
+            if last_sent.elapsed() >= interval {
+                match email.send_usage_report().await {
+                    Ok(()) => {
+                        info!("Sent scheduled storage usage report");
+                        last_sent = tokio::time::Instant::now();
+                    }
+                    Err(e) => warn!("Failed to send scheduled usage report: {}", e),
+                }
+            }
+        }
+    })
 }
 
 /// Wait for shutdown signal (SIGTERM or SIGINT/Ctrl+C).
@@ -364,6 +576,15 @@ async fn main() -> anyhow::Result<()> {
     );
     info!("IAM initialized");
 
+    // Seed SMTP relay config from environment on first boot (console-managed thereafter).
+    seed_smtp_config(&iam_store, &config).await;
+
+    // Email service for SMTP alerts and scheduled reports.
+    let email_service = Arc::new(EmailService::new(iam_store.clone(), store.clone()));
+
+    // Periodic storage usage report task (no-op until enabled in SMTP config).
+    let _usage_report_handle = start_usage_report_task(email_service.clone());
+
     // Start background cleanup task for stale multipart uploads
     let cleanup_config = CleanupConfig::new(
         Duration::from_secs(3600),
@@ -385,13 +606,23 @@ async fn main() -> anyhow::Result<()> {
         config.root_password.clone(),
     );
 
+    // Start notification dispatcher for webhook delivery; failed deliveries
+    // trigger best-effort email alerts when SMTP is configured.
+    let event_sender = start_dispatcher(
+        store.clone(),
+        DispatcherConfig::default(),
+        Some(email_service.clone() as Arc<dyn strix_core::DeliveryFailureAlerter>),
+    );
+    info!("Notification dispatcher started");
+
     // Create S3 service with IAM provider for policy enforcement
     let s3_service = StrixS3Service::with_iam(
         store.clone(),
         auth_provider,
         iam_store.clone(),
         config.root_user.clone(),
-    );
+    )
+    .with_event_sender(event_sender);
 
     // Build s3s service with IAM authentication
     let s3s_service = {
@@ -542,11 +773,17 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Seed OIDC/SSO providers from environment on first boot (console-managed thereafter).
+    seed_oidc_provider(&iam_store, &config).await;
+    let oidc_state = Arc::new(OidcState::new());
+
     let admin_state = Arc::new(
         AdminState::new(iam_store, store)
             .with_presign(presign_config)
             .with_auth(admin_auth)
-            .with_csrf(csrf_config),
+            .with_csrf(csrf_config)
+            .with_oidc(oidc_state)
+            .with_email(email_service),
     );
     let admin_app = Router::new()
         .nest("/api/v1", admin_router(admin_state))

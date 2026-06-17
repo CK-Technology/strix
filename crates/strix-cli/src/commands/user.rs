@@ -57,7 +57,7 @@ async fn list_users(args: ListArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let response = client.list_users().await?;
 
     if response.users.is_empty() {
@@ -104,7 +104,7 @@ async fn add_user(args: AddArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let response = client.create_user(&args.username).await?;
 
     success(&format!("Created user `{}`", response.user.username));
@@ -130,7 +130,7 @@ async fn remove_user(args: RemoveArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     client.delete_user(&args.username).await?;
 
     success(&format!("Removed user `{}`", args.username));
@@ -143,7 +143,7 @@ async fn user_info(args: InfoArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let user = client.get_user(&args.username).await?;
 
     println!("{}: {}", "Username".bold(), user.username);

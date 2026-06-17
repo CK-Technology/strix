@@ -1,0 +1,63 @@
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
+#
+# Run: cargo deny check
+
+[graph]
+targets = []
+all-features = false
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+# No advisories are currently ignored. Previously accepted advisories were
+# resolved by dependency updates; see docs/advisories/resolved.md. If a new
+# transitive advisory must be temporarily accepted, add it here AND document
+# the rationale in docs/advisories/accepted.md so the gate and docs stay in sync.
+ignore = []
+
+[licenses]
+# Strix itself is AGPL-3.0-only; we allow AGPL-compatible dependency licenses.
+allow = [
+    "AGPL-3.0-only",
+    "MIT",
+    "Apache-2.0",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+    # webpki-roots ships the Mozilla CA bundle under the CDLA permissive data license.
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+ignore = false
+registries = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+# Deny specific crates
+deny = []
+
+# Skip duplicate version checks for specific crates as needed.
+skip = []
+
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

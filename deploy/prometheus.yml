@@ -1,6 +1,10 @@
 # Prometheus configuration for Strix monitoring
 #
-# Start with: docker compose --profile monitoring up -d
+# Start with:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile monitoring up -d
+#
+# The monitoring override sets STRIX_METRICS_ADDRESS=0.0.0.0:9090 so Prometheus
+# can scrape metrics within the Docker network without exposing them to the host.
 
 global:
   scrape_interval: 15s

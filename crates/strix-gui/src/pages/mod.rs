@@ -17,7 +17,7 @@ mod settings;
 mod billing;
 mod tenants;
 mod not_found;
-mod placeholder;
+mod license;
 
 pub use dashboard::Dashboard;
 pub use login::Login;
@@ -37,6 +37,4 @@ pub use tenants::Tenants;
 pub use not_found::NotFound;
 
 pub use openid::OpenId;
-
-// Placeholder pages for features in development
-pub use placeholder::License;
+pub use license::License;

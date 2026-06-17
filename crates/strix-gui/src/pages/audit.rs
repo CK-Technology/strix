@@ -336,7 +336,7 @@ fn AuditLogTable(
                                 current_page.set(page + 1);
                             }
                         }
-                        disabled=move || page + 1 >= total_pages
+                        disabled=move || { page + 1 >= total_pages }
                         class="px-3 py-1 text-sm bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         "Next"

@@ -50,7 +50,7 @@ async fn list_keys(args: ListArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let response = client.list_access_keys(&args.username).await?;
 
     if response.access_keys.is_empty() {
@@ -89,7 +89,7 @@ async fn create_key(args: CreateArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let key = client.create_access_key(&args.username).await?;
 
     success(&format!("Created access key for user `{}`", args.username));
@@ -110,7 +110,7 @@ async fn remove_key(args: RemoveArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     client.delete_access_key(&args.access_key_id).await?;
 
     success(&format!("Removed access key `{}`", args.access_key_id));

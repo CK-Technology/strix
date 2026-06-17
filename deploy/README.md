@@ -36,7 +36,9 @@ docker compose down
 |---------|-----|-------------|
 | S3 API | http://localhost:9000 | S3-compatible object storage |
 | Console | http://localhost:9001 | Web UI and Admin API |
-| Metrics | http://localhost:9090/metrics | Prometheus metrics |
+| Metrics | Internal only by default | Prometheus metrics (see Monitoring section) |
+
+By default, metrics bind to `127.0.0.1:9090` inside the container for security. Use the monitoring profile to enable Prometheus scraping.
 
 ## With Monitoring
 

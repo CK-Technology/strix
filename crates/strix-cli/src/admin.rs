@@ -1,4 +1,4 @@
-//! Admin API client.
+//! Admin API client with JWT authentication.
 
 #![allow(dead_code)]
 
@@ -8,10 +8,13 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::config::Alias;
 
-/// Admin API client.
+/// Admin API client with automatic JWT authentication.
 pub struct AdminClient {
     client: Client,
     base_url: String,
+    token: Option<String>,
+    access_key: String,
+    secret_key: String,
 }
 
 impl AdminClient {
@@ -25,15 +28,62 @@ impl AdminClient {
         Self {
             client: Client::new(),
             base_url: format!("{}/api/v1", base_url.trim_end_matches('/')),
+            token: None,
+            access_key: alias.access_key.clone(),
+            secret_key: alias.secret_key.clone(),
         }
     }
 
-    /// Make a GET request.
-    pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
-        let url = format!("{}{}", self.base_url, path);
+    /// Login and obtain a JWT token.
+    pub async fn login(&mut self) -> Result<()> {
+        let url = format!("{}/login", self.base_url);
         let response = self
             .client
-            .get(&url)
+            .post(&url)
+            .json(&LoginRequest {
+                access_key_id: self.access_key.clone(),
+                secret_access_key: self.secret_key.clone(),
+            })
+            .send()
+            .await
+            .with_context(|| "Failed to connect to admin API for login")?;
+
+        if !response.status().is_success() {
+            let error: ErrorResponse = response.json().await.unwrap_or(ErrorResponse {
+                error: "Authentication failed".to_string(),
+            });
+            anyhow::bail!("Login failed: {}", error.error);
+        }
+
+        let login_response: LoginResponse = response
+            .json()
+            .await
+            .context("Failed to parse login response")?;
+
+        self.token = Some(login_response.token);
+        Ok(())
+    }
+
+    /// Ensure we have a valid token, logging in if needed.
+    async fn ensure_authenticated(&mut self) -> Result<()> {
+        if self.token.is_none() {
+            self.login().await?;
+        }
+        Ok(())
+    }
+
+    /// Make a GET request with authentication.
+    pub async fn get<T: DeserializeOwned>(&mut self, path: &str) -> Result<T> {
+        self.ensure_authenticated().await?;
+
+        let url = format!("{}{}", self.base_url, path);
+        let mut request = self.client.get(&url);
+
+        if let Some(ref token) = self.token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .with_context(|| format!("Failed to connect to {}", url))?;
@@ -48,13 +98,22 @@ impl AdminClient {
         response.json().await.context("Failed to parse response")
     }
 
-    /// Make a POST request with JSON body.
-    pub async fn post<T: DeserializeOwned, B: Serialize>(&self, path: &str, body: &B) -> Result<T> {
+    /// Make a POST request with JSON body and authentication.
+    pub async fn post<T: DeserializeOwned, B: Serialize>(
+        &mut self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        self.ensure_authenticated().await?;
+
         let url = format!("{}{}", self.base_url, path);
-        let response = self
-            .client
-            .post(&url)
-            .json(body)
+        let mut request = self.client.post(&url).json(body);
+
+        if let Some(ref token) = self.token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .with_context(|| format!("Failed to connect to {}", url))?;
@@ -69,13 +128,18 @@ impl AdminClient {
         response.json().await.context("Failed to parse response")
     }
 
-    /// Make a POST request without expecting response body.
-    pub async fn post_empty<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
+    /// Make a POST request without expecting response body, with authentication.
+    pub async fn post_empty<B: Serialize>(&mut self, path: &str, body: &B) -> Result<()> {
+        self.ensure_authenticated().await?;
+
         let url = format!("{}{}", self.base_url, path);
-        let response = self
-            .client
-            .post(&url)
-            .json(body)
+        let mut request = self.client.post(&url).json(body);
+
+        if let Some(ref token) = self.token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .with_context(|| format!("Failed to connect to {}", url))?;
@@ -90,12 +154,18 @@ impl AdminClient {
         Ok(())
     }
 
-    /// Make a DELETE request.
-    pub async fn delete(&self, path: &str) -> Result<()> {
+    /// Make a DELETE request with authentication.
+    pub async fn delete(&mut self, path: &str) -> Result<()> {
+        self.ensure_authenticated().await?;
+
         let url = format!("{}{}", self.base_url, path);
-        let response = self
-            .client
-            .delete(&url)
+        let mut request = self.client.delete(&url);
+
+        if let Some(ref token) = self.token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .with_context(|| format!("Failed to connect to {}", url))?;
@@ -112,19 +182,19 @@ impl AdminClient {
 
     // === API Methods ===
 
-    pub async fn get_server_info(&self) -> Result<ServerInfo> {
+    pub async fn get_server_info(&mut self) -> Result<ServerInfo> {
         self.get("/info").await
     }
 
-    pub async fn get_storage_usage(&self) -> Result<StorageUsage> {
+    pub async fn get_storage_usage(&mut self) -> Result<StorageUsage> {
         self.get("/usage").await
     }
 
-    pub async fn list_users(&self) -> Result<ListUsersResponse> {
+    pub async fn list_users(&mut self) -> Result<ListUsersResponse> {
         self.get("/users").await
     }
 
-    pub async fn create_user(&self, username: &str) -> Result<CreateUserResponse> {
+    pub async fn create_user(&mut self, username: &str) -> Result<CreateUserResponse> {
         self.post(
             "/users",
             &CreateUserRequest {
@@ -134,35 +204,35 @@ impl AdminClient {
         .await
     }
 
-    pub async fn get_user(&self, username: &str) -> Result<UserInfo> {
+    pub async fn get_user(&mut self, username: &str) -> Result<UserInfo> {
         self.get(&format!("/users/{}", username)).await
     }
 
-    pub async fn delete_user(&self, username: &str) -> Result<()> {
+    pub async fn delete_user(&mut self, username: &str) -> Result<()> {
         self.delete(&format!("/users/{}", username)).await
     }
 
-    pub async fn list_access_keys(&self, username: &str) -> Result<ListAccessKeysResponse> {
+    pub async fn list_access_keys(&mut self, username: &str) -> Result<ListAccessKeysResponse> {
         self.get(&format!("/users/{}/access-keys", username)).await
     }
 
-    pub async fn create_access_key(&self, username: &str) -> Result<AccessKeyResponse> {
+    pub async fn create_access_key(&mut self, username: &str) -> Result<AccessKeyResponse> {
         self.post(&format!("/users/{}/access-keys", username), &())
             .await
     }
 
-    pub async fn delete_access_key(&self, access_key_id: &str) -> Result<()> {
+    pub async fn delete_access_key(&mut self, access_key_id: &str) -> Result<()> {
         self.delete(&format!("/access-keys/{}", access_key_id))
             .await
     }
 
     // === Group Methods ===
 
-    pub async fn list_groups(&self) -> Result<ListGroupsResponse> {
+    pub async fn list_groups(&mut self) -> Result<ListGroupsResponse> {
         self.get("/groups").await
     }
 
-    pub async fn create_group(&self, name: &str) -> Result<()> {
+    pub async fn create_group(&mut self, name: &str) -> Result<()> {
         self.post_empty(
             "/groups",
             &CreateGroupRequest {
@@ -172,15 +242,15 @@ impl AdminClient {
         .await
     }
 
-    pub async fn get_group(&self, name: &str) -> Result<GroupInfo> {
+    pub async fn get_group(&mut self, name: &str) -> Result<GroupInfo> {
         self.get(&format!("/groups/{}", name)).await
     }
 
-    pub async fn delete_group(&self, name: &str) -> Result<()> {
+    pub async fn delete_group(&mut self, name: &str) -> Result<()> {
         self.delete(&format!("/groups/{}", name)).await
     }
 
-    pub async fn add_user_to_group(&self, group: &str, username: &str) -> Result<()> {
+    pub async fn add_user_to_group(&mut self, group: &str, username: &str) -> Result<()> {
         self.post_empty(
             &format!("/groups/{}/members", group),
             &AddMemberRequest {
@@ -190,12 +260,12 @@ impl AdminClient {
         .await
     }
 
-    pub async fn remove_user_from_group(&self, group: &str, username: &str) -> Result<()> {
+    pub async fn remove_user_from_group(&mut self, group: &str, username: &str) -> Result<()> {
         self.delete(&format!("/groups/{}/members/{}", group, username))
             .await
     }
 
-    pub async fn attach_policy_to_group(&self, group: &str, policy: &str) -> Result<()> {
+    pub async fn attach_policy_to_group(&mut self, group: &str, policy: &str) -> Result<()> {
         self.post_empty(
             &format!("/groups/{}/policies", group),
             &AttachPolicyRequest {
@@ -205,19 +275,19 @@ impl AdminClient {
         .await
     }
 
-    pub async fn detach_policy_from_group(&self, group: &str, policy: &str) -> Result<()> {
+    pub async fn detach_policy_from_group(&mut self, group: &str, policy: &str) -> Result<()> {
         self.delete(&format!("/groups/{}/policies/{}", group, policy))
             .await
     }
 
     // === Policy Methods ===
 
-    pub async fn list_policies(&self) -> Result<ListPoliciesResponse> {
+    pub async fn list_policies(&mut self) -> Result<ListPoliciesResponse> {
         self.get("/policies").await
     }
 
     pub async fn create_policy(
-        &self,
+        &mut self,
         name: &str,
         document: &str,
         description: Option<&str>,
@@ -233,15 +303,15 @@ impl AdminClient {
         .await
     }
 
-    pub async fn get_policy(&self, name: &str) -> Result<PolicyInfo> {
+    pub async fn get_policy(&mut self, name: &str) -> Result<PolicyInfo> {
         self.get(&format!("/policies/{}", name)).await
     }
 
-    pub async fn delete_policy(&self, name: &str) -> Result<()> {
+    pub async fn delete_policy(&mut self, name: &str) -> Result<()> {
         self.delete(&format!("/policies/{}", name)).await
     }
 
-    pub async fn attach_policy_to_user(&self, username: &str, policy: &str) -> Result<()> {
+    pub async fn attach_policy_to_user(&mut self, username: &str, policy: &str) -> Result<()> {
         self.post_empty(
             &format!("/users/{}/policies", username),
             &AttachPolicyRequest {
@@ -251,22 +321,24 @@ impl AdminClient {
         .await
     }
 
-    pub async fn detach_policy_from_user(&self, username: &str, policy: &str) -> Result<()> {
+    pub async fn detach_policy_from_user(&mut self, username: &str, policy: &str) -> Result<()> {
         self.delete(&format!("/users/{}/policies/{}", username, policy))
             .await
     }
 
     // === Event/Notification Methods ===
 
-    pub async fn get_bucket_notifications(&self, bucket: &str) -> Result<BucketNotifications> {
+    pub async fn get_bucket_notifications(&mut self, bucket: &str) -> Result<BucketNotifications> {
         self.get(&format!("/buckets/{}/notifications", bucket))
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_bucket_notification(
-        &self,
+        &mut self,
         bucket: &str,
-        arn: &str,
+        destination_type: &str,
+        destination_url: &str,
         events: &[String],
         id: Option<&str>,
         prefix: Option<&str>,
@@ -275,33 +347,83 @@ impl AdminClient {
         self.post_empty(
             &format!("/buckets/{}/notifications", bucket),
             &CreateNotificationRequest {
-                arn: arn.to_string(),
-                events: events.to_vec(),
                 id: id.map(|s| s.to_string()),
+                events: events.to_vec(),
                 prefix: prefix.map(|s| s.to_string()),
                 suffix: suffix.map(|s| s.to_string()),
+                destination_type: destination_type.to_string(),
+                destination_url: destination_url.to_string(),
             },
         )
         .await
     }
 
-    pub async fn delete_bucket_notification(&self, bucket: &str, id: &str) -> Result<()> {
+    pub async fn delete_bucket_notification(&mut self, bucket: &str, id: &str) -> Result<()> {
         self.delete(&format!("/buckets/{}/notifications/{}", bucket, id))
+            .await
+    }
+
+    pub async fn query_notification_deliveries(
+        &mut self,
+        bucket: Option<&str>,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Result<ListDeliveriesResponse> {
+        let mut query = vec![format!("limit={limit}")];
+        if let Some(b) = bucket {
+            query.push(format!("bucket={b}"));
+        }
+        if let Some(s) = status {
+            query.push(format!("status={s}"));
+        }
+        self.get(&format!("/notifications/deliveries?{}", query.join("&")))
             .await
     }
 
     // === Config Methods ===
 
-    pub async fn get_config(&self) -> Result<serde_json::Value> {
+    pub async fn get_config(&mut self) -> Result<serde_json::Value> {
         self.get("/config").await
     }
 
-    pub async fn set_config(&self, key: &str, value: &serde_json::Value) -> Result<()> {
+    pub async fn set_config(&mut self, key: &str, value: &serde_json::Value) -> Result<()> {
         self.post_empty(&format!("/config/{}", key), value).await
     }
 }
 
 // API types
+
+#[derive(Debug, Deserialize)]
+pub struct ListDeliveriesResponse {
+    pub entries: Vec<DeliveryAttempt>,
+    pub total: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeliveryAttempt {
+    pub timestamp: String,
+    pub bucket: String,
+    pub rule_id: String,
+    pub destination_type: String,
+    pub target: String,
+    pub event_type: String,
+    pub object_key: String,
+    pub attempts: u32,
+    pub status: String,
+    pub response_code: Option<u16>,
+    pub last_error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct LoginRequest {
+    access_key_id: String,
+    secret_access_key: String,
+}
+
+#[derive(Deserialize)]
+struct LoginResponse {
+    token: String,
+}
 
 #[derive(Deserialize)]
 struct ErrorResponse {
@@ -472,40 +594,26 @@ pub struct PolicyInfo {
 
 #[derive(Serialize)]
 struct CreateNotificationRequest {
-    arn: String,
-    events: Vec<String>,
     id: Option<String>,
+    events: Vec<String>,
     prefix: Option<String>,
     suffix: Option<String>,
+    destination_type: String,
+    destination_url: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BucketNotifications {
     #[serde(default)]
-    pub queue_configurations: Vec<QueueConfiguration>,
-    #[serde(default)]
-    pub topic_configurations: Vec<TopicConfiguration>,
-    #[serde(default)]
-    pub lambda_configurations: Vec<LambdaConfiguration>,
+    pub rules: Vec<NotificationRuleInfo>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct QueueConfiguration {
-    pub id: Option<String>,
-    pub queue_arn: String,
+pub struct NotificationRuleInfo {
+    pub id: String,
     pub events: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TopicConfiguration {
-    pub id: Option<String>,
-    pub topic_arn: String,
-    pub events: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LambdaConfiguration {
-    pub id: Option<String>,
-    pub lambda_arn: String,
-    pub events: Vec<String>,
+    pub prefix: Option<String>,
+    pub suffix: Option<String>,
+    pub destination_type: String,
+    pub destination_url: String,
 }

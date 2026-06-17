@@ -30,17 +30,17 @@ impl ApiClient {
 
     /// Set the JWT token for authentication.
     pub fn set_token(&self, token: &str) {
-        *self.token.write().expect("token lock poisoned") = Some(token.to_string());
+        *self.token.write().unwrap_or_else(|e| e.into_inner()) = Some(token.to_string());
     }
 
     /// Clear the JWT token.
     pub fn clear_token(&self) {
-        *self.token.write().expect("token lock poisoned") = None;
+        *self.token.write().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     /// Get the current token (if set).
     fn get_token(&self) -> Option<String> {
-        self.token.read().expect("token lock poisoned").clone()
+        self.token.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Login with access key credentials.
@@ -83,11 +83,12 @@ impl ApiClient {
                 return Err(ApiError::RateLimited(rate_limit.retry_after));
             }
 
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -134,11 +135,12 @@ impl ApiClient {
                 return Err(ApiError::RateLimited(rate_limit.retry_after));
             }
 
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -167,11 +169,12 @@ impl ApiClient {
         } else if response.status() == 401 {
             Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -207,11 +210,12 @@ impl ApiClient {
         } else if response.status() == 401 {
             Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -244,11 +248,12 @@ impl ApiClient {
         } else if response.status() == 401 {
             Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -274,11 +279,12 @@ impl ApiClient {
         } else if response.status() == 401 {
             Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -307,11 +313,12 @@ impl ApiClient {
         } else if response.status() == 401 {
             Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -606,20 +613,29 @@ impl ApiClient {
     /// Delete multiple objects.
     pub async fn delete_objects(&self, bucket: &str, keys: Vec<String>) -> Result<(), ApiError> {
         let url = format!("/buckets/{}/objects", bucket);
-        let request = Request::delete(&format!("{}{}", self.base_url, url))
-            .header("Content-Type", "application/json")
+        let mut request = Request::delete(&format!("{}{}", self.base_url, url))
+            .header("Content-Type", "application/json");
+
+        if let Some(token) = self.get_token() {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let request = request
             .body(serde_json::to_string(&DeleteObjectsRequest { keys }).map_err(|e| ApiError::Parse(e.to_string()))?)?;
 
         let response = request.send().await.map_err(|e| ApiError::Network(e.to_string()))?;
 
         if response.ok() {
             Ok(())
+        } else if response.status() == 401 {
+            Err(ApiError::Unauthorized)
         } else {
+            let status = response.status();
             let error: ErrorResponse = response
                 .json()
                 .await
                 .unwrap_or(ErrorResponse {
-                    error: "Unknown error".to_string(),
+                    error: format!("Request failed with status {}", status),
                     message: None,
                 });
             Err(ApiError::Api(error.error))
@@ -716,6 +732,71 @@ impl ApiClient {
 
         self.get(&url).await
     }
+
+    // === SSO / OIDC ===
+
+    /// List enabled SSO providers for the login page (public, no auth).
+    pub async fn get_auth_providers(&self) -> Result<AuthProvidersResponse, ApiError> {
+        self.get("/auth/providers").await
+    }
+
+    // === OIDC Provider Management (root-only) ===
+
+    /// List configured OIDC providers (secrets never returned).
+    pub async fn list_oidc_providers(&self) -> Result<Vec<OidcProviderInfo>, ApiError> {
+        self.get("/admin/oidc/providers").await
+    }
+
+    /// Create a new OIDC provider.
+    pub async fn create_oidc_provider(
+        &self,
+        id: &str,
+        config: OidcProviderPayload,
+    ) -> Result<OidcProviderInfo, ApiError> {
+        self.post(
+            "/admin/oidc/providers",
+            &CreateOidcProviderPayload {
+                id: id.to_string(),
+                config,
+            },
+        )
+        .await
+    }
+
+    /// Update an existing OIDC provider. An empty `client_secret` preserves the stored one.
+    pub async fn update_oidc_provider(
+        &self,
+        id: &str,
+        config: OidcProviderPayload,
+    ) -> Result<(), ApiError> {
+        self.put(&format!("/admin/oidc/providers/{}", id), &config)
+            .await
+    }
+
+    /// Delete an OIDC provider.
+    pub async fn delete_oidc_provider(&self, id: &str) -> Result<(), ApiError> {
+        self.delete(&format!("/admin/oidc/providers/{}", id)).await
+    }
+
+    // === SMTP / Email (root-only) ===
+
+    /// Fetch the SMTP relay configuration (the password is never returned).
+    pub async fn get_smtp_config(&self) -> Result<SmtpConfigInfo, ApiError> {
+        self.get("/admin/smtp").await
+    }
+
+    /// Create or update the SMTP relay configuration. An empty `password`
+    /// preserves the stored one.
+    pub async fn set_smtp_config(&self, config: SmtpConfigPayload) -> Result<(), ApiError> {
+        self.put("/admin/smtp", &config).await
+    }
+
+    /// Send a test email using the stored configuration. An empty `to` defaults
+    /// to the configured From address.
+    pub async fn send_test_email(&self, to: Option<String>) -> Result<(), ApiError> {
+        self.post_no_response("/admin/smtp/test", &SendTestEmailPayload { to })
+            .await
+    }
 }
 
 impl Default for ApiClient {
@@ -805,6 +886,115 @@ pub struct ServerInfo {
     pub mode: String,
     pub uptime: u64,
     pub region: String,
+}
+
+/// SSO provider list response (login-page buttons).
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthProvidersResponse {
+    #[serde(default)]
+    pub providers: Vec<AuthProvider>,
+}
+
+/// A single SSO provider for login buttons.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthProvider {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+}
+
+/// Secret-free view of a configured OIDC provider (admin management).
+#[derive(Debug, Clone, Deserialize)]
+pub struct OidcProviderInfo {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub issuer_url: String,
+    pub client_id: String,
+    pub has_client_secret: bool,
+    pub redirect_uri: String,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    pub username_claim: String,
+    pub groups_claim: Option<String>,
+    pub auto_create_users: bool,
+    pub default_policy: Option<String>,
+}
+
+/// Create/update payload for an OIDC provider.
+///
+/// On update, an empty/omitted `client_secret` preserves the stored secret.
+#[derive(Debug, Clone, Serialize)]
+pub struct OidcProviderPayload {
+    pub name: String,
+    pub enabled: bool,
+    pub issuer_url: String,
+    pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
+    pub redirect_uri: String,
+    pub scopes: Vec<String>,
+    pub username_claim: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub groups_claim: Option<String>,
+    pub auto_create_users: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_policy: Option<String>,
+}
+
+/// Create wrapper carrying the provider id alongside the flattened config.
+#[derive(Debug, Clone, Serialize)]
+struct CreateOidcProviderPayload {
+    id: String,
+    #[serde(flatten)]
+    config: OidcProviderPayload,
+}
+
+/// SMTP relay configuration as returned by the admin API (no password).
+#[derive(Debug, Clone, Deserialize)]
+pub struct SmtpConfigInfo {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    /// Whether a password is stored (the value itself is write-only).
+    pub has_password: bool,
+    pub from_address: String,
+    pub from_name: Option<String>,
+    pub use_starttls: bool,
+    pub alert_on_delivery_failure: bool,
+    pub send_usage_reports: bool,
+    pub usage_report_schedule: String,
+    pub alert_on_audit_events: bool,
+    #[serde(default)]
+    pub alert_recipients: Vec<String>,
+}
+
+/// Create/update payload for the SMTP relay configuration.
+///
+/// An empty `password` preserves the stored secret.
+#[derive(Debug, Clone, Serialize)]
+pub struct SmtpConfigPayload {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub from_address: String,
+    pub from_name: Option<String>,
+    pub use_starttls: bool,
+    pub alert_on_delivery_failure: bool,
+    pub send_usage_reports: bool,
+    pub usage_report_schedule: String,
+    pub alert_on_audit_events: bool,
+    pub alert_recipients: Vec<String>,
+}
+
+/// Body for the send-test-email endpoint.
+#[derive(Debug, Clone, Serialize)]
+struct SendTestEmailPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<String>,
 }
 
 /// Server configuration info.

@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use crate::auth::{auth_middleware, authorize_middleware, csrf_middleware};
 use crate::handlers::{self, AdminState};
+use crate::oidc;
+use crate::smtp;
 use strix_iam::IamProvider;
 
 /// Create the admin API router.
@@ -22,6 +24,9 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
     let public_routes = Router::new()
         .route("/login", post(handlers::login))
         .route("/login/password", post(handlers::login_with_password))
+        .route("/login/oidc/{provider_id}", get(oidc::login_oidc))
+        .route("/auth/callback", get(oidc::auth_callback))
+        .route("/auth/providers", get(oidc::list_auth_providers))
         .route("/health", get(handlers::health_check))
         .route("/info", get(handlers::get_server_info));
 
@@ -153,10 +158,40 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
         .route("/presign", post(handlers::generate_presign_url))
         // Audit Log
         .route("/audit", get(handlers::query_audit_log))
+        // Notification delivery diagnostics
+        .route(
+            "/notifications/deliveries",
+            get(handlers::query_notification_deliveries),
+        )
         // Policy Simulator
         .route("/simulate-policy", post(handlers::simulate_policy))
         // STS
         .route("/sts/assume-role", post(handlers::assume_role))
+        // OIDC/SSO provider management (root-only, enforced in handlers)
+        .route(
+            "/admin/oidc/providers",
+            get(oidc::list_oidc_providers_admin),
+        )
+        .route(
+            "/admin/oidc/providers",
+            post(oidc::create_oidc_provider_admin),
+        )
+        .route(
+            "/admin/oidc/providers/{id}",
+            get(oidc::get_oidc_provider_admin),
+        )
+        .route(
+            "/admin/oidc/providers/{id}",
+            put(oidc::update_oidc_provider_admin),
+        )
+        .route(
+            "/admin/oidc/providers/{id}",
+            delete(oidc::delete_oidc_provider_admin),
+        )
+        // SMTP/email configuration (root-only, enforced in handlers)
+        .route("/admin/smtp", get(smtp::get_smtp_config_admin))
+        .route("/admin/smtp", put(smtp::set_smtp_config_admin))
+        .route("/admin/smtp/test", post(smtp::send_test_email_admin))
         // Middleware is applied in reverse order (last applied runs first)
         // Execution order: audit -> csrf -> auth -> authorize -> handler
         // Apply authorization middleware (runs after auth)

@@ -18,8 +18,10 @@ use tracing::{debug, instrument};
 use strix_core::{
     AuditLogEntry, CompletePart, CopyObjectOpts, CreateBucketOpts, GetObjectOpts, ListObjectsOpts,
     ListPartsOpts, ListUploadsOpts, ListVersionsOpts, MetadataDirective, ObjectStore,
-    PutObjectOpts, Tag as CoreTag, TaggingConfiguration,
+    PutObjectOpts, S3EventType, Tag as CoreTag, TaggingConfiguration,
 };
+
+use crate::dispatcher::{EventSender, S3Event};
 use strix_iam::{Action, Effect, IamProvider, Principal, Resource};
 
 use crate::auth::AuthProvider;
@@ -50,6 +52,7 @@ pub struct StrixS3Service {
     auth: Arc<dyn AuthProvider>,
     iam: Option<Arc<dyn IamProvider>>,
     root_access_key: String,
+    event_sender: Option<EventSender>,
 }
 
 impl StrixS3Service {
@@ -60,6 +63,7 @@ impl StrixS3Service {
             auth,
             iam: None,
             root_access_key: String::new(),
+            event_sender: None,
         }
     }
 
@@ -75,6 +79,20 @@ impl StrixS3Service {
             auth,
             iam: Some(iam),
             root_access_key,
+            event_sender: None,
+        }
+    }
+
+    /// Attach an event sender for notification dispatch.
+    pub fn with_event_sender(mut self, sender: EventSender) -> Self {
+        self.event_sender = Some(sender);
+        self
+    }
+
+    /// Emit an event to the notification dispatcher (fire-and-forget).
+    fn emit_event(&self, event: S3Event) {
+        if let Some(sender) = &self.event_sender {
+            sender.emit(event);
         }
     }
 
@@ -336,10 +354,10 @@ impl StrixS3Service {
 }
 
 fn extract_forwarded_ip(headers: &HeaderMap) -> Option<String> {
-    if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
-        if let Some(first) = v.split(',').map(str::trim).find(|s| !s.is_empty()) {
-            return Some(first.to_string());
-        }
+    if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok())
+        && let Some(first) = v.split(',').map(str::trim).find(|s| !s.is_empty())
+    {
+        return Some(first.to_string());
     }
 
     headers
@@ -1191,6 +1209,7 @@ impl S3 for StrixS3Service {
         req: S3Request<PutObjectInput>,
     ) -> S3Result<S3Response<PutObjectOutput>> {
         let start = Instant::now();
+        let audit_ctx = Self::request_audit_context(&req);
 
         // Authorization check
         self.check_authorization(
@@ -1255,10 +1274,22 @@ impl S3 for StrixS3Service {
             .map_err(to_s3_error)?;
 
         let output = PutObjectOutput {
-            e_tag: Some(response.etag),
-            version_id: response.version_id,
+            e_tag: Some(response.etag.clone()),
+            version_id: response.version_id.clone(),
             ..Default::default()
         };
+
+        // Emit notification event
+        self.emit_event(S3Event {
+            event_type: S3EventType::ObjectCreatedPut,
+            bucket: input.bucket,
+            key: input.key,
+            size: Some(content_length),
+            etag: Some(response.etag),
+            version_id: response.version_id,
+            request_id: audit_ctx.request_id,
+            source_ip: audit_ctx.source_ip,
+        });
 
         // Record metrics
         counter!("strix_s3_requests_total", "operation" => "PutObject").increment(1);
@@ -1316,6 +1347,23 @@ impl S3 for StrixS3Service {
             Some(&audit_ctx),
         )
         .await;
+
+        // Emit notification event
+        let event_type = if response.delete_marker {
+            S3EventType::ObjectRemovedDeleteMarkerCreated
+        } else {
+            S3EventType::ObjectRemovedDelete
+        };
+        self.emit_event(S3Event {
+            event_type,
+            bucket: bucket.to_string(),
+            key: key.to_string(),
+            size: None,
+            etag: None,
+            version_id: response.version_id.clone(),
+            request_id: audit_ctx.request_id,
+            source_ip: audit_ctx.source_ip,
+        });
 
         Ok(S3Response::new(DeleteObjectOutput {
             delete_marker: Some(response.delete_marker),
@@ -1608,6 +1656,8 @@ impl S3 for StrixS3Service {
         &self,
         req: S3Request<CopyObjectInput>,
     ) -> S3Result<S3Response<CopyObjectOutput>> {
+        let audit_ctx = Self::request_audit_context(&req);
+
         // Authorization check for destination (PutObject)
         self.check_authorization(
             &req.credentials,
@@ -1660,6 +1710,18 @@ impl S3 for StrixS3Service {
             .copy_object(src_bucket, src_key, &input.bucket, &input.key, opts)
             .await
             .map_err(to_s3_error)?;
+
+        // Emit notification event for the destination object
+        self.emit_event(S3Event {
+            event_type: S3EventType::ObjectCreatedCopy,
+            bucket: input.bucket,
+            key: input.key,
+            size: None,
+            etag: Some(response.etag.clone()),
+            version_id: None,
+            request_id: audit_ctx.request_id,
+            source_ip: audit_ctx.source_ip,
+        });
 
         let output = CopyObjectOutput {
             copy_object_result: Some(CopyObjectResult {
@@ -1946,6 +2008,7 @@ impl S3 for StrixS3Service {
         req: S3Request<CompleteMultipartUploadInput>,
     ) -> S3Result<S3Response<CompleteMultipartUploadOutput>> {
         let start = Instant::now();
+        let audit_ctx = Self::request_audit_context(&req);
 
         // Authorization check - completing multipart upload requires PutObject
         self.check_authorization(
@@ -1982,6 +2045,18 @@ impl S3 for StrixS3Service {
             .complete_multipart_upload(&upload, parts)
             .await
             .map_err(to_s3_error)?;
+
+        // Emit notification event
+        self.emit_event(S3Event {
+            event_type: S3EventType::ObjectCreatedCompleteMultipartUpload,
+            bucket: input.bucket.clone(),
+            key: input.key.clone(),
+            size: None,
+            etag: Some(response.etag.clone()),
+            version_id: response.version_id.clone(),
+            request_id: audit_ctx.request_id,
+            source_ip: audit_ctx.source_ip,
+        });
 
         let output = CompleteMultipartUploadOutput {
             bucket: Some(input.bucket),

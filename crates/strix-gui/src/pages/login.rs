@@ -4,6 +4,7 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 
 use crate::api::ApiError;
+use crate::components::{Button, Input};
 use crate::state::AppState;
 
 /// Login page component.
@@ -16,6 +17,34 @@ pub fn Login() -> impl IntoView {
     let password = RwSignal::new(String::new());
     let error = RwSignal::new(Option::<String>::None);
     let loading = RwSignal::new(false);
+
+    // SSO providers for "Sign in with..." buttons.
+    let providers = RwSignal::new(Vec::<crate::api::AuthProvider>::new());
+    {
+        let api = app_state.api.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Ok(resp) = api.get_auth_providers().await {
+                providers.set(resp.providers);
+            }
+        });
+    }
+
+    // Surface an SSO error passed back via ?sso_error=... on the login URL.
+    if let Some(window) = web_sys::window() {
+        if let Ok(search) = window.location().search() {
+            if let Some(idx) = search.find("sso_error=") {
+                let raw = &search[idx + "sso_error=".len()..];
+                let raw = raw.split('&').next().unwrap_or(raw);
+                let decoded = js_sys::decode_uri_component(raw)
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| raw.replace('+', " "));
+                if !decoded.is_empty() {
+                    error.set(Some(decoded));
+                }
+            }
+        }
+    }
 
     let on_submit = {
         let app_state = app_state.clone();
@@ -92,48 +121,62 @@ pub fn Login() -> impl IntoView {
                     </Show>
 
                     <div class="space-y-4">
-                        <div>
-                            <label for="username" class="block text-sm font-medium text-slate-300">
-                                "Username"
-                            </label>
-                            <input
-                                id="username"
-                                type="text"
-                                required=true
-                                autocomplete="username"
-                                class="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm text-white placeholder-slate-400 focus:outline-none focus:ring-strix-500 focus:border-strix-500 sm:text-sm"
-                                placeholder="root"
-                                prop:value=move || username.get()
-                                on:input=move |ev| username.set(event_target_value(&ev))
-                            />
-                        </div>
-
-                        <div>
-                            <label for="password" class="block text-sm font-medium text-slate-300">
-                                "Password"
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                required=true
-                                autocomplete="current-password"
-                                class="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm text-white placeholder-slate-400 focus:outline-none focus:ring-strix-500 focus:border-strix-500 sm:text-sm"
-                                placeholder="Enter your password"
-                                prop:value=move || password.get()
-                                on:input=move |ev| password.set(event_target_value(&ev))
-                            />
-                        </div>
+                        <Input
+                            id="username"
+                            label="Username"
+                            placeholder="root"
+                            required=true
+                            autocomplete="username"
+                            value=username
+                        />
+                        <Input
+                            id="password"
+                            label="Password"
+                            input_type="password"
+                            placeholder="Enter your password"
+                            required=true
+                            autocomplete="current-password"
+                            value=password
+                        />
                     </div>
 
                     <div>
-                        <button
-                            type="submit"
-                            disabled=move || loading.get()
-                            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-strix-600 hover:bg-strix-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-navy-900 focus:ring-strix-500 disabled:opacity-50"
-                        >
+                        <Button button_type="submit" full_width=true disabled=loading>
                             {move || if loading.get() { "Signing in..." } else { "Sign in" }}
-                        </button>
+                        </Button>
                     </div>
+
+                    <Show when=move || !providers.get().is_empty()>
+                        <div class="relative">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t border-slate-600"></div>
+                            </div>
+                            <div class="relative flex justify-center text-sm">
+                                <span class="px-2 bg-slate-800 text-slate-400">"or continue with"</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <For
+                                each=move || providers.get()
+                                key=|p| p.id.clone()
+                                let:provider
+                            >
+                                {
+                                    let href = format!("/api/v1/login/oidc/{}", provider.id);
+                                    let label = format!("Sign in with {}", provider.name);
+                                    view! {
+                                        <a
+                                            href=href
+                                            class="flex w-full justify-center items-center rounded-md border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 transition-colors"
+                                        >
+                                            {label}
+                                        </a>
+                                    }
+                                }
+                            </For>
+                        </div>
+                    </Show>
                 </form>
             </div>
         </div>

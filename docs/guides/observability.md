@@ -2,6 +2,24 @@
 
 Strix provides comprehensive observability through metrics, structured logging, and distributed tracing.
 
+## Telemetry Pipeline
+
+```mermaid
+flowchart LR
+    strix[Strix]
+
+    strix -->|":9090 /metrics"| prom[Prometheus]
+    prom --> grafana[Grafana dashboards]
+    prom --> alertmgr[Alertmanager]
+
+    strix -->|JSON logs| shipper[Vector / Fluent Bit]
+    shipper --> loki[Loki]
+    loki --> grafana
+
+    strix -->|"OTLP :4317 (otel feature)"| traces[Jaeger / Tempo]
+    traces --> grafana
+```
+
 ## Metrics
 
 Strix exposes Prometheus metrics on the metrics endpoint (default: `127.0.0.1:9090`).

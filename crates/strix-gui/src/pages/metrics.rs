@@ -38,6 +38,9 @@ pub fn Metrics() -> impl IntoView {
                         Ok(info)
                     }
                     Err(e) => {
+                        if matches!(e, crate::api::ApiError::Unauthorized) {
+                            auto_refresh_enabled.set(false);
+                        }
                         app_state.handle_error(&e);
                         let msg = e.to_string();
                         server_info_error.set(Some(msg.clone()));
@@ -63,6 +66,9 @@ pub fn Metrics() -> impl IntoView {
                         Ok(usage)
                     }
                     Err(e) => {
+                        if matches!(e, crate::api::ApiError::Unauthorized) {
+                            auto_refresh_enabled.set(false);
+                        }
                         app_state.handle_error(&e);
                         let msg = e.to_string();
                         storage_usage_error.set(Some(msg.clone()));

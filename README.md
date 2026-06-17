@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/strix-logo.png" alt="Strix Logo" width="180"/>
+  <img src="assets/strix-web.png" alt="Strix Logo" width="195"/>
 </p>
 
 <h1 align="center">Strix</h1>
@@ -77,12 +77,16 @@
 - **Streaming Transfers** - Memory-efficient large object handling
 - **Rate Limiting** - Configurable request throttling per IP
 
-### Coming Soon
-- Object Locking (WORM)
-- Lifecycle Rules
-- Event Notifications
-- LDAP/OIDC Integration
+### Shipped in v0.1.0
+- Object Lock (WORM compliance with Governance/Compliance modes)
+- Lifecycle Rules (expiration and transitions)
+- Event Notifications (webhook delivery with retries and a persisted delivery log; AMQP/Kafka/Redis are config-only for now)
+- OIDC/SSO Integration (Azure AD, Google, custom)
+
+### Planned
 - Distributed Mode with Erasure Coding
+- Site Replication
+- Built-in TLS Termination
 
 ## Quick Start
 
@@ -96,14 +100,14 @@ docker run -d \
   -e STRIX_ROOT_USER=admin \
   -e STRIX_ROOT_PASSWORD=password123 \
   -v strix-data:/var/lib/strix \
-  ghcr.io/strix-storage/strix:latest
+  ghcr.io/ck-technology/strix:latest
 ```
 
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/strix-storage/strix.git
+git clone https://github.com/CK-Technology/strix.git
 cd strix
 
 # Build release binary
@@ -187,8 +191,8 @@ sx stat local/my-bucket/file.txt
 sx rm local/my-bucket/file.txt
 
 # User management
-sx admin user add local alice
-sx admin user list local
+sx user add local alice
+sx user list local
 ```
 
 ## Architecture
@@ -222,13 +226,21 @@ sx admin user list local
 
 ## Documentation
 
-- [API Reference](docs/api-reference.md) - S3 and Admin API documentation
-- [Configuration Guide](docs/configuration.md) - Detailed configuration options
-- [CLI Reference](docs/cli-reference.md) - Complete sx command reference
-- [S3 Compatibility](docs/s3-compatibility.md) - S3 API compatibility matrix
-- [Tool Compatibility Testing](docs/tool-compatibility-testing.md) - Practical AWS CLI, restic, rclone, and s3cmd validation steps
-- [IAM & Policies](docs/iam-policies.md) - Access control documentation
-- [Architecture](docs/architecture.md) - System design and internals
+Full documentation index: [docs/README.md](docs/README.md).
+
+- [Quickstart](docs/getting-started/quickstart.md) - Get running in minutes
+- [Configuration](docs/getting-started/configuration.md) - All settings and environment variables
+- [CLI Reference](docs/reference/cli.md) - Complete sx command reference
+- [Admin API](docs/reference/admin-api.md) - REST API for server management
+- [S3 Compatibility](docs/reference/s3-compatibility.md) - S3 API compatibility matrix
+- [IAM & Policies](docs/guides/iam-policies.md) - Access control documentation
+- [SSO/OIDC](docs/guides/sso-oidc.md) - Single sign-on integration
+- [Email Alerts & Reports](docs/guides/email-alerts.md) - SMTP relay, alerts, and usage reports
+- [Reverse Proxy & TLS](docs/guides/reverse-proxy.md) - nginx termination for S3 and console
+- [Backup & Recovery](docs/guides/backup-recovery.md) - Backing up Strix's data
+- [S3 Backup Targets](docs/guides/backup-targets.md) - Using Strix as a backup destination
+- [Observability](docs/guides/observability.md) - Metrics, logging, and tracing
+- [Architecture](docs/internals/architecture.md) - System design and internals
 
 ## Project Structure
 
@@ -251,7 +263,7 @@ strix/
 
 ### Prerequisites
 
-- Rust 1.85+ (edition 2024)
+- Rust 1.96+ (edition 2024)
 - Trunk (for building the GUI): `cargo install trunk`
 - wasm32 target: `rustup target add wasm32-unknown-unknown`
 
@@ -280,7 +292,7 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 ```bash
 # Clone and enter the repo
-git clone https://github.com/strix-storage/strix.git
+git clone https://github.com/CK-Technology/strix.git
 cd strix
 
 # Run in development mode

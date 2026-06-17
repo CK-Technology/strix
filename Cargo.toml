@@ -6,9 +6,9 @@ exclude = ["crates/strix-gui"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "AGPL-3.0"
-repository = "https://github.com/ghostkellz/strix"
-rust-version = "1.85"
+license = "AGPL-3.0-only"
+repository = "https://github.com/CK-Technology/strix"
+rust-version = "1.96"
 
 [workspace.dependencies]
 # Async runtime
@@ -48,7 +48,6 @@ clap = { version = "4", features = ["derive", "env"] }
 sha2 = "0.10"
 hmac = "0.12"
 md-5 = "0.10"
-md5 = "0.7"
 hex = "0.4"
 base64 = "0.22"
 aes-gcm = "0.10"
@@ -63,6 +62,12 @@ time = "0.3"
 
 # JWT and Auth
 jsonwebtoken = "9"
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Email (SMTP relay for alerts and reports)
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-rustls-tls", "hostname", "pool"] }
 
 # Utilities
 uuid = { version = "1", features = ["v4"] }

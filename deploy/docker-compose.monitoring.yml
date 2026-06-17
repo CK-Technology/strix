@@ -1,0 +1,14 @@
+# Docker Compose override for monitoring profile
+#
+# This file exposes Strix metrics to Prometheus within the compose network.
+# Metrics remain inaccessible from outside the Docker network.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile monitoring up -d
+
+services:
+  strix:
+    environment:
+      # Bind metrics to all interfaces so Prometheus can scrape from within Docker network
+      STRIX_METRICS_ADDRESS: "0.0.0.0:9090"
+    # Note: We do NOT expose port 9090 to the host - metrics stay internal to Docker network

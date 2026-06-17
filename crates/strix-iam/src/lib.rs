@@ -4,9 +4,11 @@
 
 mod error;
 pub mod idp;
+pub mod oidc_client;
 mod password;
 mod policy;
 mod secrets;
+mod smtp;
 mod store;
 mod types;
 
@@ -15,14 +17,19 @@ pub use idp::{
     IdentityProviderConfig, IdentityProviderType, LoginMethod, OidcAuthResult, OidcClaims,
     OidcConfig, OidcTokenResponse, Session,
 };
-pub use password::{hash_password, verify_password};
+pub use oidc_client::{OidcClient, OidcDiscovery};
+pub use password::{
+    MIN_PASSWORD_LENGTH, PasswordValidationError, hash_password, validate_and_hash_password,
+    validate_password, verify_password,
+};
 pub use policy::{
     Action, ActionSpec, BucketPolicy, BucketPolicyStatement, ConditionContext, Effect, ParsedArn,
     Policy, PolicyStatement, PolicyValidationError, Principal, PrincipalSpec, Resource,
     ResourceSpec, evaluate_condition, validate_bucket_policy, validate_policy,
 };
 pub use secrets::{decrypt_secret, derive_encryption_key, encrypt_secret};
-pub use store::IamStore;
+pub use smtp::{SmtpConfig, UsageReportSchedule};
+pub use store::{IamStore, RateLimitConfig, RateLimitStatus};
 pub use types::{
     AccessKey, AccessKeyStatus, AssumeRoleRequest, Group, TemporaryCredential, User, UserStatus,
 };

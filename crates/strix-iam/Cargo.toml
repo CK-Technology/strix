@@ -1,8 +1,10 @@
 [package]
 name = "strix-iam"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "IAM management for Strix object storage"
 
 [dependencies]
@@ -16,10 +18,15 @@ chrono.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
-rand = "0.9"
+rand.workspace = true
 ulid.workspace = true
+reqwest.workspace = true
+jsonwebtoken.workspace = true
 urlencoding = "2"
 argon2 = "0.5"
 base64.workspace = true
 sha2.workspace = true
 hex.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

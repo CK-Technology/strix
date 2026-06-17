@@ -31,18 +31,20 @@ pub fn AccessKeys() -> impl IntoView {
                 match api.list_users().await {
                     Ok(users_resp) => {
                         let mut all_keys: Vec<(UserInfo, Vec<AccessKeyInfo>)> = Vec::new();
+                        let mut had_errors = false;
                         for user in users_resp.users {
                             match api.list_access_keys(&user.username).await {
                                 Ok(r) => all_keys.push((user, r.access_keys)),
                                 Err(e) => {
                                     app_state.handle_error(&e);
-                                    let msg = format!("Failed loading keys for {}: {}", user.username, e);
-                                    users_keys_error.set(Some(msg.clone()));
-                                    return Err(msg);
+                                    had_errors = true;
+                                    all_keys.push((user, vec![]));
                                 }
                             }
                         }
-                        users_keys_error.set(None);
+                        if !had_errors {
+                            users_keys_error.set(None);
+                        }
                         Ok(all_keys)
                     }
                     Err(e) => {

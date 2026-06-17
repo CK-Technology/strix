@@ -30,9 +30,12 @@ pub fn Button(
     /// Button size.
     #[prop(optional)]
     size: ButtonSize,
-    /// Whether the button is disabled.
+    /// Whether the button is disabled. Accepts a static `bool` or a reactive signal.
+    #[prop(into, optional)]
+    disabled: Signal<bool>,
+    /// Whether the button should span the full width of its container.
     #[prop(optional)]
-    disabled: bool,
+    full_width: bool,
     /// Click handler.
     #[prop(optional)]
     on_click: Option<Box<dyn Fn() + 'static>>,
@@ -71,13 +74,14 @@ pub fn Button(
         }
     };
 
-    let class = format!("{} {} {}", base_class, size_class, variant_class);
+    let width_class = if full_width { "w-full" } else { "" };
+    let class = format!("{} {} {} {}", base_class, size_class, variant_class, width_class);
 
     view! {
         <button
             type=button_type
             class=class
-            disabled=disabled
+            disabled=move || disabled.get()
             aria-label=aria_label
             aria-pressed=aria_pressed.map(|p| if p { "true" } else { "false" })
             on:click=move |_| {

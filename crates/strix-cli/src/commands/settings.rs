@@ -42,7 +42,7 @@ pub async fn run(cmd: SettingsCommands) -> Result<()> {
 async fn get(args: GetArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     let settings = client.get_config().await?;
 
@@ -64,7 +64,7 @@ async fn get(args: GetArgs) -> Result<()> {
 async fn set(args: SetArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     // Parse value as JSON if possible, otherwise use as string
     let value: serde_json::Value = serde_json::from_str(&args.value)

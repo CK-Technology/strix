@@ -818,9 +818,7 @@ async fn test_complete_multipart_with_sse_c_fails_without_key_context() {
         .key(&key)
         .sse_customer_algorithm("AES256")
         .sse_customer_key(base64::engine::general_purpose::STANDARD.encode([7u8; 32]))
-        .sse_customer_key_md5(
-            base64::engine::general_purpose::STANDARD.encode(md5::compute([7u8; 32]).0),
-        )
+        .sse_customer_key_md5(strix_crypto::md5_base64(&[7u8; 32]))
         .send()
         .await
         .unwrap();

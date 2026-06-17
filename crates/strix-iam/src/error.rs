@@ -56,6 +56,10 @@ pub enum IamError {
     #[error("Password hash error: {0}")]
     PasswordHash(String),
 
+    /// Weak password rejected.
+    #[error("Weak password: {0}")]
+    WeakPassword(String),
+
     /// Invalid credentials.
     #[error("Invalid credentials")]
     InvalidCredentials,
@@ -63,6 +67,14 @@ pub enum IamError {
     /// Encryption error.
     #[error("Encryption error: {0}")]
     Encryption(String),
+
+    /// OIDC authentication error.
+    #[error("OIDC error: {0}")]
+    Oidc(String),
+
+    /// SMTP/email configuration error.
+    #[error("SMTP error: {0}")]
+    Smtp(String),
 
     /// Internal error.
     #[error("Internal error: {0}")]

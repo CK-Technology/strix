@@ -93,7 +93,7 @@ pub async fn run(cmd: PolicyCommands) -> Result<()> {
 async fn list(args: ListArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     let policies = client.list_policies().await?;
 
@@ -120,7 +120,7 @@ async fn list(args: ListArgs) -> Result<()> {
 async fn add(args: AddArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     // Read document from file if it starts with @
     let document = if args.document.starts_with('@') {
@@ -146,7 +146,7 @@ async fn add(args: AddArgs) -> Result<()> {
 async fn remove(args: RemoveArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client.delete_policy(&args.name).await?;
     println!("Policy '{}' removed successfully.", args.name);
@@ -157,7 +157,7 @@ async fn remove(args: RemoveArgs) -> Result<()> {
 async fn info(args: InfoArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     let policy = client.get_policy(&args.name).await?;
 
@@ -182,7 +182,7 @@ async fn info(args: InfoArgs) -> Result<()> {
 async fn attach(args: AttachArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .attach_policy_to_user(&args.username, &args.policy)
@@ -198,7 +198,7 @@ async fn attach(args: AttachArgs) -> Result<()> {
 async fn detach(args: DetachArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .detach_policy_from_user(&args.username, &args.policy)

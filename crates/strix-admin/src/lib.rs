@@ -4,14 +4,19 @@
 //! and access key operations.
 
 pub mod auth;
+mod email;
 mod handlers;
+mod oidc;
 mod routes;
+mod smtp;
 
 pub use auth::{
     AuthState, AuthenticatedUser, CsrfConfig, LoginRequest, LoginResponse, PasswordLoginRequest,
     RateLimiter, csrf_middleware,
 };
+pub use email::{EmailError, EmailService};
 pub use handlers::{AdminState, PresignConfig, ServerConfig};
+pub use oidc::OidcState;
 pub use routes::admin_router;
 
 use serde::{Deserialize, Serialize};
@@ -586,6 +591,49 @@ pub struct ListAuditLogResponse {
     pub offset: u32,
 }
 
+// === Notification Delivery Types ===
+
+/// Query parameters for notification delivery attempts.
+#[derive(Debug, Deserialize)]
+pub struct DeliveryLogQuery {
+    /// Filter by bucket name.
+    pub bucket: Option<String>,
+    /// Filter by rule ID.
+    pub rule_id: Option<String>,
+    /// Filter by status (success/failed/unsupported).
+    pub status: Option<String>,
+    /// Maximum number of results (default 100).
+    pub limit: Option<u32>,
+    /// Offset for pagination.
+    pub offset: Option<u32>,
+}
+
+/// A notification delivery attempt response entry.
+#[derive(Debug, Serialize)]
+pub struct DeliveryAttemptResponse {
+    pub id: String,
+    pub timestamp: String,
+    pub bucket: String,
+    pub rule_id: String,
+    pub destination_type: String,
+    pub target: String,
+    pub event_type: String,
+    pub object_key: String,
+    pub attempts: u32,
+    pub status: String,
+    pub response_code: Option<u16>,
+    pub last_error: Option<String>,
+}
+
+/// List notification delivery attempts response.
+#[derive(Debug, Serialize)]
+pub struct ListDeliveriesResponse {
+    pub entries: Vec<DeliveryAttemptResponse>,
+    pub total: u64,
+    pub limit: u32,
+    pub offset: u32,
+}
+
 // === Event Notification Types ===
 
 /// List bucket notifications response.
@@ -660,6 +708,70 @@ pub struct IdentityProviderInfo {
     pub issuer_url: String,
     pub client_id: String,
     pub auto_create_users: bool,
+}
+
+// === SMTP / Email Types ===
+
+/// SMTP configuration response (password never included).
+#[derive(Debug, Serialize)]
+pub struct SmtpConfigResponse {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    /// Whether a password is stored (the value itself is write-only).
+    pub has_password: bool,
+    pub from_address: String,
+    pub from_name: Option<String>,
+    pub use_starttls: bool,
+    pub alert_on_delivery_failure: bool,
+    pub send_usage_reports: bool,
+    pub usage_report_schedule: String,
+    pub alert_on_audit_events: bool,
+    pub alert_recipients: Vec<String>,
+}
+
+/// Request to create or update SMTP configuration.
+#[derive(Debug, Deserialize)]
+pub struct SmtpConfigRequest {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    /// Password (write-only). Leave empty to keep the existing password.
+    #[serde(default)]
+    pub password: String,
+    pub from_address: String,
+    #[serde(default)]
+    pub from_name: Option<String>,
+    #[serde(default = "default_true")]
+    pub use_starttls: bool,
+    #[serde(default)]
+    pub alert_on_delivery_failure: bool,
+    #[serde(default)]
+    pub send_usage_reports: bool,
+    #[serde(default = "default_usage_schedule")]
+    pub usage_report_schedule: String,
+    #[serde(default)]
+    pub alert_on_audit_events: bool,
+    #[serde(default)]
+    pub alert_recipients: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_usage_schedule() -> String {
+    "weekly".to_string()
+}
+
+/// Request to send a test email.
+#[derive(Debug, Deserialize, Default)]
+pub struct SendTestEmailRequest {
+    /// Optional recipient override (defaults to the From address).
+    #[serde(default)]
+    pub to: Option<String>,
 }
 
 // === Policy Simulator Types ===

@@ -68,7 +68,12 @@ impl SessionConfig {
     }
 
     /// Generate a session token for a user.
-    pub fn create_token(&self, username: &str, access_key_id: &str, is_root: bool) -> Result<String, String> {
+    pub fn create_token(
+        &self,
+        username: &str,
+        access_key_id: &str,
+        is_root: bool,
+    ) -> Result<String, String> {
         let now = Utc::now();
         let exp = now + ChronoDuration::seconds(self.expiry.as_secs() as i64);
 
@@ -619,7 +624,9 @@ mod tests {
     fn test_session_token() {
         let config = SessionConfig::new(Duration::from_secs(3600));
 
-        let token = config.create_token("testuser", "AKIATEST123").unwrap();
+        let token = config
+            .create_token("testuser", "AKIATEST123", false)
+            .unwrap();
         let claims = config.verify_token(&token).unwrap();
 
         assert_eq!(claims.sub, "testuser");

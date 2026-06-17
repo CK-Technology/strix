@@ -203,6 +203,27 @@ pub fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
         CREATE INDEX IF NOT EXISTS idx_audit_log_bucket ON audit_log(bucket);
 
+        -- Notification delivery attempts (webhook delivery diagnostics)
+        CREATE TABLE IF NOT EXISTS notification_delivery (
+            id TEXT PRIMARY KEY NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+            bucket TEXT NOT NULL,
+            rule_id TEXT NOT NULL,
+            destination_type TEXT NOT NULL,
+            target TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            object_key TEXT NOT NULL,
+            attempts INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            response_code INTEGER,
+            last_error TEXT
+        );
+
+        -- Indexes for delivery queries
+        CREATE INDEX IF NOT EXISTS idx_notif_delivery_timestamp ON notification_delivery(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_notif_delivery_bucket ON notification_delivery(bucket);
+        CREATE INDEX IF NOT EXISTS idx_notif_delivery_status ON notification_delivery(status);
+
         -- Enable foreign keys
         PRAGMA foreign_keys = ON;
         "#,

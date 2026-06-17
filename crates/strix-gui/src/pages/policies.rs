@@ -97,7 +97,7 @@ pub fn Policies() -> impl IntoView {
                         version.update(|v| *v += 1);
                     }
                     Err(e) => {
-                        json_error.set(Some(e.to_string()));
+                        app_state.handle_error(&e);
                     }
                 }
             });

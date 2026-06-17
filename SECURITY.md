@@ -51,33 +51,22 @@ cargo install cargo-audit
 cargo audit
 ```
 
-### v0.1.0 Advisory Status
+### Current Audit Status
 
-Audit performed: 2026-04-03
-Tool version: cargo-audit 0.22.1
-Result: **0 vulnerabilities**, 3 warnings
+`cargo audit` and `cargo deny check advisories` both pass with no vulnerabilities
+and no accepted (ignored) advisories.
 
-#### Accepted Warnings
+Known transitive advisories, both accepted and resolved, are tracked under
+[`docs/advisories/`](docs/advisories/):
 
-The following advisory warnings are accepted for v0.1.0. They are transitive dependencies with low practical risk for this release:
+- [`docs/advisories/accepted.md`](docs/advisories/accepted.md) — advisories that
+  are knowingly accepted and the matching `deny.toml` ignore entries (currently
+  none).
+- [`docs/advisories/resolved.md`](docs/advisories/resolved.md) — advisories that
+  were cleared by dependency updates, with the fix that resolved each one.
 
-| Advisory | Crate | Severity | Source | Disposition |
-|----------|-------|----------|--------|-------------|
-| RUSTSEC-2025-0119 | `number_prefix` | Warning (unmaintained) | `indicatif` -> `strix-cli` | Accept for v0.1.0 |
-| RUSTSEC-2025-0134 | `rustls-pemfile` | Warning (unmaintained) | `aws-smithy-http-client` -> AWS SDK chain | Accept for v0.1.0 |
-| RUSTSEC-2026-0002 | `lru` | Warning (unsound `IterMut`) | `aws-sdk-s3` -> CLI/tests | Accept with caution |
-
-#### Rationale
-
-- **number_prefix**: Only affects CLI progress bar formatting. No security impact.
-- **rustls-pemfile**: Transitive via AWS SDK TLS stack. AWS SDK updates will resolve.
-- **lru**: Unsoundness in `IterMut` iterator. We do not use this API path directly. AWS SDK updates will resolve.
-
-#### Remediation Plan
-
-These warnings will be addressed in v0.1.1 by:
-1. Updating `indicatif` when a release with replaced `number_prefix` is available
-2. Updating AWS SDK dependencies when new releases address the transitives
+`deny.toml` is the authoritative ignore list and is kept in sync with
+`docs/advisories/accepted.md`.
 
 ## Security Hardening Checklist
 

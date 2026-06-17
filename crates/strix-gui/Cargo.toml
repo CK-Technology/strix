@@ -2,7 +2,7 @@
 name = "strix-gui"
 version = "0.1.0"
 edition = "2021"
-license = "AGPL-3.0"
+license = "AGPL-3.0-only"
 description = "Web GUI for Strix object storage"
 
 [lib]
@@ -23,6 +23,8 @@ web-sys = { version = "0.3", features = [
     "Navigator",
     "Clipboard",
     "Storage",
+    "History",
+    "Location",
     "Headers",
     "Request",
     "RequestInit",

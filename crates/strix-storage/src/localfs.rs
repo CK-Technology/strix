@@ -25,15 +25,18 @@ use tokio_rusqlite::Connection;
 use tracing::{debug, info, instrument, warn};
 use ulid::Ulid;
 
+use md5::Digest as Md5Digest;
+use md5::Md5;
 use strix_core::{
     AuditLogEntry, AuditQueryOpts, BucketInfo, CompletePart, CopyObjectOpts, CopyObjectResponse,
-    CorsConfiguration, CreateBucketOpts, DeleteObjectResponse, EncryptionInfo, Error,
-    GetObjectOpts, GetObjectResponse, LegalHoldStatus, LifecycleConfiguration, ListObjectsOpts,
-    ListObjectsResponse, ListPartsOpts, ListPartsResponse, ListUploadsOpts, ListUploadsResponse,
-    ListVersionsOpts, ListVersionsResponse, MetadataDirective, MultipartUpload,
-    NotificationConfiguration, ObjectBody, ObjectInfo, ObjectLockConfiguration, ObjectRetention,
-    ObjectStore, ObjectVersion, PartInfo, PutObjectOpts, PutObjectResponse, Result, RetentionMode,
-    ServerSideEncryption, StorageClass, TaggingConfiguration, TenantInfo,
+    CorsConfiguration, CreateBucketOpts, DeleteObjectResponse, DeliveryQueryOpts, DeliveryStatus,
+    EncryptionInfo, Error, GetObjectOpts, GetObjectResponse, LegalHoldStatus,
+    LifecycleConfiguration, ListObjectsOpts, ListObjectsResponse, ListPartsOpts, ListPartsResponse,
+    ListUploadsOpts, ListUploadsResponse, ListVersionsOpts, ListVersionsResponse, MetadataDirective,
+    MultipartUpload, NotificationConfiguration, NotificationDeliveryAttempt, ObjectBody, ObjectInfo,
+    ObjectLockConfiguration, ObjectRetention, ObjectStore, ObjectVersion, PartInfo, PutObjectOpts,
+    PutObjectResponse, Result, RetentionMode, ServerSideEncryption, StorageClass,
+    TaggingConfiguration, TenantInfo,
 };
 use strix_crypto::{
     KEY_SIZE, decrypt_aes256_gcm, derive_key, encrypt_aes256_gcm, format_etag,
@@ -273,12 +276,12 @@ impl LocalFsStore {
             return Ok(true);
         }
 
-        if retention_mode.is_some() {
-            if let Some(until) = retain_until {
-                let until_dt = Self::parse_datetime(&until);
-                if Utc::now() < until_dt {
-                    return Ok(true);
-                }
+        if retention_mode.is_some()
+            && let Some(until) = retain_until
+        {
+            let until_dt = Self::parse_datetime(&until);
+            if Utc::now() < until_dt {
+                return Ok(true);
             }
         }
 
@@ -1105,14 +1108,14 @@ impl ObjectStore for LocalFsStore {
             .await?;
 
         let mut total_size: u64 = 0;
-        let mut hasher = md5::Context::new();
+        let mut hasher = Md5::new();
         let mut body = body;
         while let Some(chunk) = body.next().await {
             let chunk = chunk?;
             total_size += chunk.len() as u64;
 
             // Compute MD5 while streaming
-            hasher.consume(&chunk);
+            Md5Digest::update(&mut hasher, &chunk);
             tmp_file.write_all(&chunk).await?;
         }
         tmp_file.flush().await?;
@@ -1149,7 +1152,7 @@ impl ObjectStore for LocalFsStore {
             Vec::new() // Not used for non-encrypted objects
         };
 
-        let etag = format_etag(&format!("{:x}", hasher.compute()));
+        let etag = format_etag(&format!("{:x}", hasher.finalize()));
         let original_size = total_size;
 
         // Determine encryption settings and handle file appropriately
@@ -1531,14 +1534,14 @@ impl ObjectStore for LocalFsStore {
 
         for obj in objects {
             // Handle delimiter for common prefixes (only if delimiter is non-empty)
-            if let Some(ref delim) = delimiter {
-                if !delim.is_empty() {
-                    let suffix = &obj.key[prefix.len()..];
-                    if let Some(pos) = suffix.find(delim.as_str()) {
-                        let common_prefix = format!("{}{}{}", prefix, &suffix[..pos], delim);
-                        common_prefixes.insert(common_prefix);
-                        continue;
-                    }
+            if let Some(ref delim) = delimiter
+                && !delim.is_empty()
+            {
+                let suffix = &obj.key[prefix.len()..];
+                if let Some(pos) = suffix.find(delim.as_str()) {
+                    let common_prefix = format!("{}{}{}", prefix, &suffix[..pos], delim);
+                    common_prefixes.insert(common_prefix);
+                    continue;
                 }
             }
 
@@ -1886,13 +1889,13 @@ impl ObjectStore for LocalFsStore {
             .open(&part_path)
             .await?;
 
-        let mut hasher = md5::Context::new();
+        let mut hasher = Md5::new();
         let mut written = 0u64;
 
         let mut body = body;
         while let Some(chunk) = body.next().await {
             let chunk = chunk?;
-            hasher.consume(&chunk);
+            Md5Digest::update(&mut hasher, &chunk);
             file.write_all(&chunk).await?;
             written += chunk.len() as u64;
         }
@@ -1900,7 +1903,7 @@ impl ObjectStore for LocalFsStore {
         file.flush().await?;
         file.sync_all().await?;
 
-        let etag = format_etag(&format!("{:x}", hasher.compute()));
+        let etag = format_etag(&format!("{:x}", hasher.finalize()));
         let now = Utc::now();
 
         let upload_id = upload.upload_id.clone();
@@ -2790,25 +2793,23 @@ impl ObjectStore for LocalFsStore {
         ) in objects
         {
             // Handle version_id_marker pagination
-            if !past_marker {
-                if let Some(ref vid_marker) = version_id_marker {
-                    if &version_id == vid_marker {
-                        past_marker = true;
-                        continue; // Skip the marker itself
-                    }
-                    continue;
+            if !past_marker && let Some(ref vid_marker) = version_id_marker {
+                if &version_id == vid_marker {
+                    past_marker = true;
+                    continue; // Skip the marker itself
                 }
+                continue;
             }
 
             // Handle delimiter for common prefixes
-            if let Some(ref delim) = delimiter {
-                if !delim.is_empty() {
-                    let suffix = &key[prefix.len()..];
-                    if let Some(pos) = suffix.find(delim.as_str()) {
-                        let common_prefix = format!("{}{}{}", prefix, &suffix[..pos], delim);
-                        common_prefixes.insert(common_prefix);
-                        continue;
-                    }
+            if let Some(ref delim) = delimiter
+                && !delim.is_empty()
+            {
+                let suffix = &key[prefix.len()..];
+                if let Some(pos) = suffix.find(delim.as_str()) {
+                    let common_prefix = format!("{}{}{}", prefix, &suffix[..pos], delim);
+                    common_prefixes.insert(common_prefix);
+                    continue;
                 }
             }
 
@@ -3707,6 +3708,133 @@ impl ObjectStore for LocalFsStore {
             .await
             .map_err(db_err)
     }
+
+    // === Notification Delivery Operations ===
+
+    #[instrument(skip(self, attempt))]
+    async fn log_notification_delivery(&self, attempt: NotificationDeliveryAttempt) -> Result<()> {
+        let id = attempt.id;
+        let timestamp = attempt.timestamp.to_rfc3339();
+        let bucket = attempt.bucket;
+        let rule_id = attempt.rule_id;
+        let destination_type = attempt.destination_type;
+        let target = attempt.target;
+        let event_type = attempt.event_type;
+        let object_key = attempt.object_key;
+        let attempts = attempt.attempts as i64;
+        let status = attempt.status.to_string();
+        let response_code = attempt.response_code.map(|c| c as i64);
+        let last_error = attempt.last_error;
+
+        self.db
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO notification_delivery (id, timestamp, bucket, rule_id, destination_type, target, event_type, object_key, attempts, status, response_code, last_error)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    params![
+                        &id,
+                        &timestamp,
+                        &bucket,
+                        &rule_id,
+                        &destination_type,
+                        &target,
+                        &event_type,
+                        &object_key,
+                        attempts,
+                        &status,
+                        response_code,
+                        &last_error,
+                    ],
+                )?;
+                Ok(())
+            })
+            .await
+            .map_err(db_err)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn query_notification_deliveries(
+        &self,
+        opts: DeliveryQueryOpts,
+    ) -> Result<Vec<NotificationDeliveryAttempt>> {
+        let limit = opts.limit.unwrap_or(100) as i64;
+        let offset = opts.offset.unwrap_or(0) as i64;
+
+        self.db
+            .call(move |conn| {
+                let mut conditions = Vec::new();
+                let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+                if let Some(ref bucket) = opts.bucket {
+                    conditions.push("bucket = ?");
+                    params_vec.push(Box::new(bucket.clone()));
+                }
+                if let Some(ref rule_id) = opts.rule_id {
+                    conditions.push("rule_id = ?");
+                    params_vec.push(Box::new(rule_id.clone()));
+                }
+                if let Some(status) = opts.status {
+                    conditions.push("status = ?");
+                    params_vec.push(Box::new(status.to_string()));
+                }
+
+                let where_clause = if conditions.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {}", conditions.join(" AND "))
+                };
+
+                let sql = format!(
+                    "SELECT id, timestamp, bucket, rule_id, destination_type, target, event_type, object_key, attempts, status, response_code, last_error
+                     FROM notification_delivery
+                     {}
+                     ORDER BY timestamp DESC
+                     LIMIT ? OFFSET ?",
+                    where_clause
+                );
+
+                params_vec.push(Box::new(limit));
+                params_vec.push(Box::new(offset));
+
+                let params_refs: Vec<&dyn rusqlite::ToSql> =
+                    params_vec.iter().map(|p| p.as_ref()).collect();
+
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                    let timestamp_str: String = row.get(1)?;
+                    let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now());
+                    let status_str: String = row.get(9)?;
+                    let status = status_str.parse().unwrap_or(DeliveryStatus::Failed);
+
+                    Ok(NotificationDeliveryAttempt {
+                        id: row.get(0)?,
+                        timestamp,
+                        bucket: row.get(2)?,
+                        rule_id: row.get(3)?,
+                        destination_type: row.get(4)?,
+                        target: row.get(5)?,
+                        event_type: row.get(6)?,
+                        object_key: row.get(7)?,
+                        attempts: row.get::<_, i64>(8)? as u32,
+                        status,
+                        response_code: row.get::<_, Option<i64>>(10)?.map(|c| c as u16),
+                        last_error: row.get(11)?,
+                    })
+                })?;
+
+                let mut entries = Vec::new();
+                for row in rows {
+                    entries.push(row?);
+                }
+                Ok(entries)
+            })
+            .await
+            .map_err(db_err)
+    }
 }
 
 // === Cleanup Operations (not part of ObjectStore trait) ===
@@ -3755,10 +3883,10 @@ impl LocalFsStore {
 
         // Delete multipart part files from multipart directory.
         let upload_dir = self.root.join("multipart").join(&upload_id);
-        if let Err(e) = tokio::fs::remove_dir_all(&upload_dir).await {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!("Failed to remove multipart dir {:?}: {}", upload_dir, e);
-            }
+        if let Err(e) = tokio::fs::remove_dir_all(&upload_dir).await
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!("Failed to remove multipart dir {:?}: {}", upload_dir, e);
         }
 
         // Delete the upload and parts from the database

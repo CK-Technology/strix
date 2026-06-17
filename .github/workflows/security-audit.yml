@@ -1,0 +1,101 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Run weekly on Monday at 9:00 UTC
+    - cron: '0 9 * * 1'
+  push:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run security audit
+        id: audit
+        run: |
+          cargo audit 2>&1 | tee audit-output.txt
+          echo "audit_status=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Check for new vulnerabilities
+        id: check
+        run: |
+          # Count vulnerabilities not in our accepted list
+          # Our accepted advisories: RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104
+          ACCEPTED="RUSTSEC-2026-0098|RUSTSEC-2026-0099|RUSTSEC-2026-0104"
+          NEW_VULNS=$(grep -E "^Crate:" audit-output.txt | grep -v -E "$ACCEPTED" | wc -l || echo "0")
+          echo "new_vulnerabilities=$NEW_VULNS" >> $GITHUB_OUTPUT
+          if [ "$NEW_VULNS" -gt "0" ]; then
+            echo "::warning::Found $NEW_VULNS new vulnerabilities not in accepted list"
+          fi
+
+      - name: Create issue for new vulnerabilities
+        if: steps.check.outputs.new_vulnerabilities > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('audit-output.txt', 'utf8');
+
+            const title = `Security Audit: ${process.env.NEW_VULNS} new vulnerabilities found`;
+            const body = `## Weekly Security Audit Results
+
+            The automated security audit found new vulnerabilities that are not in the accepted list.
+
+            ### Audit Output
+            \`\`\`
+            ${output.substring(0, 60000)}
+            \`\`\`
+
+            ### Action Required
+            1. Review the vulnerabilities above
+            2. Update dependencies if fixes are available
+            3. If accepted, add to \`deny.toml\` with justification and update \`SECURITY.md\`
+
+            ---
+            *This issue was automatically created by the security-audit workflow.*
+            `;
+
+            // Check if similar issue exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security'
+            });
+
+            const existingIssue = issues.data.find(i => i.title.includes('Security Audit'));
+
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## Updated Audit Results\n\n${body}`
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'dependencies']
+              });
+            }
+        env:
+          NEW_VULNS: ${{ steps.check.outputs.new_vulnerabilities }}

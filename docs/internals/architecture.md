@@ -4,46 +4,35 @@ This document describes the internal architecture of Strix.
 
 ## High-Level Overview
 
-```
-                                    ┌──────────────────────────────────────────────────┐
-                                    │                    Strix                          │
-                                    │                                                   │
-  ┌─────────────┐                   │  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
-  │  S3 Client  │──────────────────────▶│   S3 API    │  │ Admin API   │  │    GUI    │ │
-  │ (AWS SDK)   │       :9000       │  │   (s3s)     │  │  (Axum)     │  │ (Leptos)  │ │
-  └─────────────┘                   │  └──────┬──────┘  └──────┬──────┘  └─────┬─────┘ │
-                                    │         │                │               │       │
-  ┌─────────────┐                   │         └────────────────┼───────────────┘       │
-  │   Browser   │──────────────────────────────────────────────┼───────────────────────│
-  │             │       :9001       │                          │                       │
-  └─────────────┘                   │                          ▼                       │
-                                    │  ┌───────────────────────────────────────────┐   │
-                                    │  │              Core Services                 │   │
-                                    │  │                                           │   │
-                                    │  │  ┌───────────┐ ┌──────────┐ ┌──────────┐  │   │
-                                    │  │  │    IAM    │ │  Policy  │ │  Crypto  │  │   │
-                                    │  │  │  Store    │ │  Engine  │ │ (Sig V4) │  │   │
-                                    │  │  │ (SQLite)  │ │          │ │          │  │   │
-                                    │  │  └───────────┘ └──────────┘ └──────────┘  │   │
-                                    │  └───────────────────────────────────────────┘   │
-                                    │                          │                       │
-                                    │                          ▼                       │
-                                    │  ┌───────────────────────────────────────────┐   │
-                                    │  │             Storage Layer                  │   │
-                                    │  │                                           │   │
-                                    │  │  ┌─────────────────────────────────────┐  │   │
-                                    │  │  │      Local Filesystem Backend       │  │   │
-                                    │  │  │   (MessagePack metadata + files)    │  │   │
-                                    │  │  └─────────────────────────────────────┘  │   │
-                                    │  └───────────────────────────────────────────┘   │
-                                    │                          │                       │
-                                    └──────────────────────────┼───────────────────────┘
-                                                               │
-                                                               ▼
-                                                    ┌─────────────────────┐
-                                                    │    Filesystem       │
-                                                    │   /var/lib/strix    │
-                                                    └─────────────────────┘
+```mermaid
+flowchart TD
+    s3client[S3 Client / AWS SDK]
+    browser[Browser]
+
+    subgraph strix [Strix]
+        s3api["S3 API (s3s) :9000"]
+        admin["Admin API (Axum) :9001"]
+        gui["Web Console (Leptos/WASM)"]
+
+        subgraph core [Core Services]
+            iam["IAM Store (SQLite)"]
+            policy[Policy Engine]
+            crypto["Crypto (SigV4)"]
+        end
+
+        storage["Storage Layer (local FS backend)"]
+    end
+
+    fs[(Filesystem /var/lib/strix)]
+
+    s3client -->|HTTP S3| s3api
+    browser -->|HTTPS console| gui
+    gui -->|REST + JWT| admin
+
+    s3api --> core
+    admin --> core
+    core --> storage
+    storage --> fs
 ```
 
 ## Crate Structure
@@ -153,16 +142,16 @@ Filesystem-based storage backend.
 **Directory Layout:**
 ```
 /var/lib/strix/
-├── .strix/
-│   ├── iam.db              # SQLite for IAM data
-│   └── config.json         # Runtime config
-└── buckets/
-    └── {bucket}/
-        ├── .bucket.meta    # Bucket metadata (MessagePack)
-        └── objects/
-            └── {key-hash}/
-                ├── xl.meta # Object metadata (MessagePack)
-                └── part.1  # Object data
+├── meta/
+│   ├── strix.db            # SQLite for object/bucket metadata
+│   ├── iam.db              # SQLite for IAM data (separate DB)
+│   └── encryption.key      # Master encryption key for SSE-S3
+├── objects/                # Object blobs with sharded paths
+│   └── ab/cd/{object_id}.blob   # 4-char prefix sharding
+├── multipart/              # In-progress multipart uploads
+│   └── {upload-id}/
+│       └── {part_number}.part
+└── tmp/                    # Temporary files for atomic writes
 ```
 
 **Metadata Format (MessagePack):**
@@ -289,8 +278,15 @@ Admin REST API for server management.
 - `/api/v1/presign` - Pre-signed URL generation
 
 **Authentication:**
-Currently uses session-based auth (cookie) for web console.
-API requests can use the root credentials.
+The Admin API authenticates with JWT bearer tokens (rate-limited login).
+Tokens are minted on username/password login or via OIDC/SSO single sign-on.
+The web console stores its session token and sends it as a `Bearer` header.
+
+**Optional integrations:**
+- OIDC/SSO login (OAuth2 Authorization Code flow, JWKS RS256 verification);
+  providers are stored in the IAM database. See `docs/guides/sso-oidc.md`.
+- SMTP relay for outbound alerts and scheduled usage reports. See
+  `docs/guides/email-alerts.md`.
 
 ### strix-gui
 

@@ -10,7 +10,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
 
 ### Prerequisites
 
-- Rust 1.85+ (edition 2024)
+- Rust 1.91+ (edition 2024)
 - Trunk (for GUI development): `cargo install trunk`
 - wasm32 target: `rustup target add wasm32-unknown-unknown`
 
@@ -18,7 +18,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
 
 ```bash
 # Clone the repository
-git clone https://github.com/ghostkellz/strix.git
+git clone https://github.com/CK-Technology/strix.git
 cd strix
 
 # Build all crates
@@ -115,11 +115,10 @@ Look for issues labeled `good-first-issue` for beginner-friendly tasks.
 
 ### Feature Development
 
-- Object locking (WORM compliance)
-- Lifecycle rules
-- Event notifications (webhooks, SQS, etc.)
-- LDAP/OIDC authentication
 - Distributed mode with erasure coding
+- Bucket replication
+- Built-in TLS support
+- LDAP/OIDC authentication
 
 ### Documentation
 

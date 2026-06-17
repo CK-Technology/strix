@@ -14,10 +14,12 @@ use axum::{
 use chrono::Utc;
 
 use strix_core::{AuditLogEntry, ObjectStore};
-use strix_iam::{AccessKeyStatus, IamProvider, IamStore, UserStatus};
+use strix_iam::{AccessKeyStatus, IamProvider, IamStore, RateLimitConfig, UserStatus};
 use strix_storage::LocalFsStore;
 
-use crate::auth::{AuthState, CsrfConfig, LoginRequest, LoginResponse, PasswordLoginRequest, RateLimitResponse};
+use crate::auth::{
+    AuthState, CsrfConfig, LoginRequest, LoginResponse, PasswordLoginRequest, RateLimitResponse,
+};
 use crate::{ErrorCode, PaginatedResponse, PaginationQuery};
 
 use crate::{
@@ -25,7 +27,8 @@ use crate::{
     AuditLogQuery, BucketDetailInfo, BucketInfo, BucketUsage, CreateAccessKeyResponse,
     CreateBucketRequest, CreateGroupRequest, CreateNotificationRuleRequest, CreatePolicyRequest,
     CreateTenantRequest, CreateUserRequest, CreateUserResponse, DeleteObjectsRequest,
-    ErrorResponse, GetVersioningResponse, GroupInfo, ListAuditLogResponse,
+    DeliveryAttemptResponse, DeliveryLogQuery, ErrorResponse, GetVersioningResponse, GroupInfo,
+    ListAuditLogResponse, ListDeliveriesResponse,
     ListBucketNotificationsResponse, ListObjectsResponse, NotificationRuleInfo, ObjectInfo,
     PolicyInfo, PresignRequest, PresignResponse, ServerConfigInfo, ServerInfo,
     SetVersioningRequest, StorageUsageResponse, TenantFilterQuery, TenantInfoResponse,
@@ -104,6 +107,9 @@ pub struct AdminState {
     pub server_config: ServerConfig,
     pub auth: AuthState,
     pub csrf: CsrfConfig,
+    pub rate_limit_config: RateLimitConfig,
+    pub oidc: Arc<crate::oidc::OidcState>,
+    pub email: Option<Arc<crate::email::EmailService>>,
 }
 
 impl AdminState {
@@ -117,6 +123,9 @@ impl AdminState {
             server_config: ServerConfig::default(),
             auth: AuthState::new(),
             csrf: CsrfConfig::default(),
+            rate_limit_config: RateLimitConfig::default(),
+            oidc: Arc::new(crate::oidc::OidcState::default()),
+            email: None,
         }
     }
 
@@ -141,6 +150,24 @@ impl AdminState {
     /// Set CSRF configuration.
     pub fn with_csrf(mut self, csrf: CsrfConfig) -> Self {
         self.csrf = csrf;
+        self
+    }
+
+    /// Set rate limit configuration.
+    pub fn with_rate_limit_config(mut self, config: RateLimitConfig) -> Self {
+        self.rate_limit_config = config;
+        self
+    }
+
+    /// Set OIDC state (configured providers).
+    pub fn with_oidc(mut self, oidc: Arc<crate::oidc::OidcState>) -> Self {
+        self.oidc = oidc;
+        self
+    }
+
+    /// Set the email service (SMTP alerts and reports).
+    pub fn with_email(mut self, email: Arc<crate::email::EmailService>) -> Self {
+        self.email = Some(email);
         self
     }
 }
@@ -214,6 +241,10 @@ pub async fn audit_middleware(
         request_id,
     };
 
+    if let Some(email) = &state.email {
+        email.maybe_alert_audit(&entry).await;
+    }
+
     if let Err(e) = state.storage.log_audit_event(entry).await {
         tracing::warn!("Failed to log admin audit event: {}", e);
     }
@@ -235,8 +266,15 @@ pub async fn get_server_info(State(state): State<Arc<AdminState>>) -> impl IntoR
     })
 }
 
-pub async fn health_check() -> impl IntoResponse {
-    StatusCode::OK
+pub async fn health_check(State(state): State<Arc<AdminState>>) -> impl IntoResponse {
+    let storage_ok = state.storage.list_buckets().await.is_ok();
+    let db_ok = state.iam.list_users().await.is_ok();
+
+    if storage_ok && db_ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
 }
 
 // === Authentication ===
@@ -247,19 +285,30 @@ pub async fn login(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    let ip = addr.ip();
+    let ip_key = format!("login:{}", addr.ip());
 
-    // Check rate limiting
-    if state.auth.rate_limiter.is_limited(&ip) {
-        let retry_after = state.auth.rate_limiter.lockout_remaining(&ip).unwrap_or(60);
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(RateLimitResponse {
-                error: "Too many failed login attempts. Please try again later.".to_string(),
-                retry_after,
-            }),
-        )
-            .into_response();
+    // Check rate limiting (persistent)
+    match state
+        .iam
+        .is_rate_limited(&ip_key, &state.rate_limit_config)
+        .await
+    {
+        Ok(status) if status.is_locked => {
+            let retry_after = status.lockout_remaining_secs.unwrap_or(60);
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(RateLimitResponse {
+                    error: "Too many failed login attempts. Please try again later.".to_string(),
+                    retry_after,
+                }),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::warn!("Rate limit check failed: {}", e);
+            // Continue with login attempt on rate limit check failure
+        }
+        _ => {}
     }
 
     // Look up credentials
@@ -268,7 +317,9 @@ pub async fn login(
             // Verify the secret matches
             if access_key.secret_access_key.as_deref() == Some(&req.secret_access_key) {
                 // Successful login - clear rate limit and generate token
-                state.auth.rate_limiter.clear(&ip);
+                if let Err(e) = state.iam.clear_login_attempts(&ip_key).await {
+                    tracing::warn!("Failed to clear rate limit: {}", e);
+                }
 
                 // Update last used timestamp
                 let _ = state
@@ -276,11 +327,11 @@ pub async fn login(
                     .update_access_key_last_used(&req.access_key_id)
                     .await;
 
-                match state
-                    .auth
-                    .session_config
-                    .create_token(&user.username, &access_key.access_key_id, user.is_root)
-                {
+                match state.auth.session_config.create_token(
+                    &user.username,
+                    &access_key.access_key_id,
+                    user.is_root,
+                ) {
                     Ok(token) => {
                         let expires_at = Utc::now()
                             + chrono::Duration::seconds(
@@ -307,8 +358,14 @@ pub async fn login(
                         .into_response(),
                 }
             } else {
-                // Wrong secret
-                state.auth.rate_limiter.record_failure(&ip);
+                // Wrong secret - record failure
+                if let Err(e) = state
+                    .iam
+                    .record_login_failure(&ip_key, &state.rate_limit_config)
+                    .await
+                {
+                    tracing::warn!("Failed to record login failure: {}", e);
+                }
                 (
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse::new("Invalid credentials")),
@@ -317,8 +374,14 @@ pub async fn login(
             }
         }
         Ok(None) => {
-            // Access key not found
-            state.auth.rate_limiter.record_failure(&ip);
+            // Access key not found - record failure
+            if let Err(e) = state
+                .iam
+                .record_login_failure(&ip_key, &state.rate_limit_config)
+                .await
+            {
+                tracing::warn!("Failed to record login failure: {}", e);
+            }
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse::new("Invalid credentials")),
@@ -341,23 +404,38 @@ pub async fn login_with_password(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<PasswordLoginRequest>,
 ) -> impl IntoResponse {
-    let ip = addr.ip();
+    let ip_key = format!("login:{}", addr.ip());
 
-    // Check rate limiting
-    if state.auth.rate_limiter.is_limited(&ip) {
-        let retry_after = state.auth.rate_limiter.lockout_remaining(&ip).unwrap_or(60);
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(RateLimitResponse {
-                error: "Too many failed login attempts. Please try again later.".to_string(),
-                retry_after,
-            }),
-        )
-            .into_response();
+    // Check rate limiting (persistent)
+    match state
+        .iam
+        .is_rate_limited(&ip_key, &state.rate_limit_config)
+        .await
+    {
+        Ok(status) if status.is_locked => {
+            let retry_after = status.lockout_remaining_secs.unwrap_or(60);
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(RateLimitResponse {
+                    error: "Too many failed login attempts. Please try again later.".to_string(),
+                    retry_after,
+                }),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::warn!("Rate limit check failed: {}", e);
+            // Continue with login attempt on rate limit check failure
+        }
+        _ => {}
     }
 
     // Verify username/password
-    match state.iam.verify_user_password(&req.username, &req.password).await {
+    match state
+        .iam
+        .verify_user_password(&req.username, &req.password)
+        .await
+    {
         Ok(true) => {
             // Password verified - check user exists and is active
             match state.iam.get_user(&req.username).await {
@@ -371,18 +449,20 @@ pub async fn login_with_password(
                     }
 
                     // Successful login - clear rate limit and generate token
-                    state.auth.rate_limiter.clear(&ip);
+                    if let Err(e) = state.iam.clear_login_attempts(&ip_key).await {
+                        tracing::warn!("Failed to clear rate limit: {}", e);
+                    }
 
                     // Create token with username (no access key for password login)
-                    match state
-                        .auth
-                        .session_config
-                        .create_token(&user.username, "password-auth", user.is_root)
-                    {
+                    match state.auth.session_config.create_token(
+                        &user.username,
+                        "password-auth",
+                        user.is_root,
+                    ) {
                         Ok(token) => {
                             let expires_at = Utc::now()
                                 + chrono::Duration::seconds(
-                                    state.auth.session_config.expiry.as_secs() as i64
+                                    state.auth.session_config.expiry.as_secs() as i64,
                                 );
 
                             (
@@ -407,7 +487,13 @@ pub async fn login_with_password(
                 }
                 Err(_) => {
                     // User not found (shouldn't happen if password verified)
-                    state.auth.rate_limiter.record_failure(&ip);
+                    if let Err(e) = state
+                        .iam
+                        .record_login_failure(&ip_key, &state.rate_limit_config)
+                        .await
+                    {
+                        tracing::warn!("Failed to record login failure: {}", e);
+                    }
                     (
                         StatusCode::UNAUTHORIZED,
                         Json(ErrorResponse::new("Invalid credentials")),
@@ -417,8 +503,14 @@ pub async fn login_with_password(
             }
         }
         Ok(false) => {
-            // Wrong password
-            state.auth.rate_limiter.record_failure(&ip);
+            // Wrong password - record failure
+            if let Err(e) = state
+                .iam
+                .record_login_failure(&ip_key, &state.rate_limit_config)
+                .await
+            {
+                tracing::warn!("Failed to record login failure: {}", e);
+            }
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse::new("Invalid credentials")),
@@ -1914,6 +2006,66 @@ pub async fn query_audit_log(
             (
                 StatusCode::OK,
                 Json(ListAuditLogResponse {
+                    entries: response_entries,
+                    total,
+                    limit,
+                    offset,
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new(e.to_string())),
+        )
+            .into_response(),
+    }
+}
+
+/// List recent notification delivery attempts (webhook delivery diagnostics).
+pub async fn query_notification_deliveries(
+    State(state): State<Arc<AdminState>>,
+    axum::extract::Query(query): axum::extract::Query<DeliveryLogQuery>,
+) -> impl IntoResponse {
+    use strix_core::types::{DeliveryQueryOpts, DeliveryStatus, ObjectStore};
+
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+    let status = query.status.as_deref().and_then(|s| s.parse::<DeliveryStatus>().ok());
+
+    let opts = DeliveryQueryOpts {
+        bucket: query.bucket,
+        rule_id: query.rule_id,
+        status,
+        limit: Some(limit),
+        offset: Some(offset),
+    };
+
+    match state.storage.query_notification_deliveries(opts).await {
+        Ok(entries) => {
+            let response_entries: Vec<DeliveryAttemptResponse> = entries
+                .into_iter()
+                .map(|e| DeliveryAttemptResponse {
+                    id: e.id,
+                    timestamp: e.timestamp.to_rfc3339(),
+                    bucket: e.bucket,
+                    rule_id: e.rule_id,
+                    destination_type: e.destination_type,
+                    target: e.target,
+                    event_type: e.event_type,
+                    object_key: e.object_key,
+                    attempts: e.attempts,
+                    status: e.status.to_string(),
+                    response_code: e.response_code,
+                    last_error: e.last_error,
+                })
+                .collect();
+
+            let total = response_entries.len() as u64;
+
+            (
+                StatusCode::OK,
+                Json(ListDeliveriesResponse {
                     entries: response_entries,
                     total,
                     limit,

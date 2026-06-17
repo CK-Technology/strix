@@ -7,8 +7,8 @@ publish = false
 
 [dependencies]
 # AWS SDK for S3 testing
-aws-config = "1"
-aws-sdk-s3 = "1"
+aws-config = { version = "1", default-features = false, features = ["rt-tokio", "default-https-client", "behavior-version-latest"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "default-https-client", "behavior-version-latest"] }
 aws-credential-types = "1"
 aws-smithy-runtime-api = "1"
 
@@ -27,7 +27,7 @@ reqwest = { version = "0.12", features = ["json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
-md5 = "0.7"
+strix-crypto = { workspace = true }
 
 # Tracing
 tracing = { workspace = true }
@@ -40,6 +40,7 @@ tokio-rusqlite = { workspace = true }
 strix-core = { workspace = true }
 strix-storage = { workspace = true }
 strix-iam = { workspace = true }
+strix-s3 = { workspace = true }
 
 [[test]]
 name = "s3_conformance"
@@ -60,3 +61,7 @@ path = "src/iam.rs"
 [[test]]
 name = "recovery"
 path = "src/recovery.rs"
+
+[[test]]
+name = "notifications"
+path = "src/notifications.rs"

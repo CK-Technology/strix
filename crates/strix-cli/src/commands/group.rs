@@ -114,7 +114,7 @@ pub async fn run(cmd: GroupCommands) -> Result<()> {
 async fn list(args: ListArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     let groups = client.list_groups().await?;
 
@@ -139,7 +139,7 @@ async fn list(args: ListArgs) -> Result<()> {
 async fn add(args: AddArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client.create_group(&args.name).await?;
     println!("Group '{}' created successfully.", args.name);
@@ -150,7 +150,7 @@ async fn add(args: AddArgs) -> Result<()> {
 async fn remove(args: RemoveArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client.delete_group(&args.name).await?;
     println!("Group '{}' removed successfully.", args.name);
@@ -161,7 +161,7 @@ async fn remove(args: RemoveArgs) -> Result<()> {
 async fn info(args: InfoArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     let group = client.get_group(&args.name).await?;
 
@@ -193,7 +193,7 @@ async fn info(args: InfoArgs) -> Result<()> {
 async fn add_member(args: AddMemberArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .add_user_to_group(&args.group, &args.username)
@@ -206,7 +206,7 @@ async fn add_member(args: AddMemberArgs) -> Result<()> {
 async fn remove_member(args: RemoveMemberArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .remove_user_from_group(&args.group, &args.username)
@@ -222,7 +222,7 @@ async fn remove_member(args: RemoveMemberArgs) -> Result<()> {
 async fn attach_policy(args: AttachPolicyArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .attach_policy_to_group(&args.group, &args.policy)
@@ -238,7 +238,7 @@ async fn attach_policy(args: AttachPolicyArgs) -> Result<()> {
 async fn detach_policy(args: DetachPolicyArgs) -> Result<()> {
     let config = Config::load()?;
     let alias = parse_alias(&config, &args.alias)?;
-    let client = AdminClient::new(&alias);
+    let mut client = AdminClient::new(&alias);
 
     client
         .detach_policy_from_group(&args.group, &args.policy)

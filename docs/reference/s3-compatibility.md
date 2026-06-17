@@ -36,8 +36,8 @@ Status values in this matrix are evidence-based:
 | GetBucketLifecycle | :white_check_mark: | |
 | PutBucketLifecycle | :white_check_mark: | |
 | DeleteBucketLifecycle | :white_check_mark: | |
-| GetBucketNotification | :white_check_mark: | Via Admin API |
-| PutBucketNotification | :white_check_mark: | Via Admin API |
+| GetBucketNotification | :construction: | Config storage only; delivery not implemented |
+| PutBucketNotification | :construction: | Config storage only; delivery not implemented |
 | GetBucketLogging | :x: | Planned |
 | PutBucketLogging | :x: | Planned |
 | GetBucketTagging | :white_check_mark: | |

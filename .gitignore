@@ -1,11 +1,8 @@
 target/
-/target
-Cargo.lock
 **/*.rs.bk
-TODO.md
-DEVELOPMENT_ROADMAP.md
+
 CLAUDE.md
-tasks/lessons.md
+
 # GUI build output
 crates/strix-gui/dist/
 
@@ -38,8 +35,5 @@ Thumbs.db
 #/target
 
 # ck stuff
-archive/
-SPEC.md
-FRONT_END.md
-WEB_GUI.md 
+archive/ 
 tasks/

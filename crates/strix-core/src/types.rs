@@ -540,6 +540,17 @@ pub trait ObjectStore: Send + Sync {
 
     /// Query audit log entries.
     async fn query_audit_log(&self, opts: AuditQueryOpts) -> Result<Vec<AuditLogEntry>>;
+
+    // === Notification Delivery Operations ===
+
+    /// Record a notification delivery attempt for later diagnosis.
+    async fn log_notification_delivery(&self, attempt: NotificationDeliveryAttempt) -> Result<()>;
+
+    /// Query recent notification delivery attempts.
+    async fn query_notification_deliveries(
+        &self,
+        opts: DeliveryQueryOpts,
+    ) -> Result<Vec<NotificationDeliveryAttempt>>;
 }
 
 /// Response from deleting an object or version.
@@ -993,6 +1004,102 @@ pub struct AuditLogEntry {
     pub bytes_sent: Option<u64>,
     /// Request ID.
     pub request_id: String,
+}
+
+/// Outcome of a single notification delivery attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveryStatus {
+    /// Delivered successfully (2xx response).
+    Success,
+    /// Delivery failed after exhausting retries.
+    Failed,
+    /// Destination type is configured but not supported for delivery.
+    Unsupported,
+}
+
+impl std::fmt::Display for DeliveryStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeliveryStatus::Success => write!(f, "success"),
+            DeliveryStatus::Failed => write!(f, "failed"),
+            DeliveryStatus::Unsupported => write!(f, "unsupported"),
+        }
+    }
+}
+
+impl std::str::FromStr for DeliveryStatus {
+    type Err = ();
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "success" => Ok(DeliveryStatus::Success),
+            "failed" => Ok(DeliveryStatus::Failed),
+            "unsupported" => Ok(DeliveryStatus::Unsupported),
+            _ => Err(()),
+        }
+    }
+}
+
+/// A persisted record of a notification delivery attempt.
+///
+/// Recorded so failed webhook deliveries are diagnosable after the fact
+/// instead of being silently dropped.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationDeliveryAttempt {
+    /// Unique ID for this delivery record.
+    pub id: String,
+    /// When the final attempt completed.
+    pub timestamp: DateTime<Utc>,
+    /// Bucket whose rule fired.
+    pub bucket: String,
+    /// ID of the notification rule that matched.
+    pub rule_id: String,
+    /// Destination kind: "webhook", "amqp", "kafka", "redis".
+    pub destination_type: String,
+    /// Target (e.g. webhook URL) the event was sent to.
+    pub target: String,
+    /// S3 event type that triggered delivery.
+    pub event_type: String,
+    /// Object key the event was for.
+    pub object_key: String,
+    /// Number of attempts made (1 = delivered first try).
+    pub attempts: u32,
+    /// Final delivery status.
+    pub status: DeliveryStatus,
+    /// HTTP response code from the last attempt, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_code: Option<u16>,
+    /// Last error message, if delivery failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+/// Options for querying notification delivery attempts.
+#[derive(Debug, Clone, Default)]
+pub struct DeliveryQueryOpts {
+    /// Filter by bucket name.
+    pub bucket: Option<String>,
+    /// Filter by rule ID.
+    pub rule_id: Option<String>,
+    /// Filter by delivery status.
+    pub status: Option<DeliveryStatus>,
+    /// Maximum number of results.
+    pub limit: Option<u32>,
+    /// Offset for pagination.
+    pub offset: Option<u32>,
+}
+
+/// Hook for alerting on failed notification deliveries.
+///
+/// Implemented outside the core crate (e.g. by the email service in
+/// `strix-admin`) and handed to the notification dispatcher so a failed
+/// delivery can trigger an out-of-band alert without coupling the
+/// dispatcher to any concrete email/transport implementation.
+#[async_trait]
+pub trait DeliveryFailureAlerter: Send + Sync {
+    /// Called after a delivery attempt has been persisted with a non-success
+    /// status. Implementations should be best-effort and must not panic.
+    async fn alert_delivery_failure(&self, attempt: &NotificationDeliveryAttempt);
 }
 
 /// Options for querying audit log entries.

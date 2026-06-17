@@ -24,6 +24,9 @@ pub fn Input(
     /// Input type.
     #[prop(default = "text")]
     input_type: &'static str,
+    /// Autocomplete hint for browsers and password managers.
+    #[prop(optional)]
+    autocomplete: Option<&'static str>,
     /// Value signal.
     value: RwSignal<String>,
     /// Whether the input is required.
@@ -96,6 +99,7 @@ pub fn Input(
                 placeholder=placeholder.unwrap_or("")
                 required=required
                 disabled=disabled
+                autocomplete=autocomplete
                 aria-required=if required { Some("true") } else { None }
                 aria-invalid=if has_error { Some("true") } else { None }
                 aria-describedby=describedby

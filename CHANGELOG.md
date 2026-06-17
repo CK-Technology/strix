@@ -1,8 +1,48 @@
 # Changelog
 
 All notable changes to this project are documented in this file.
+## [0.0.0] - 2026-06-16
 
-## [0.1.0] - 2026-04-03
+### Added
+
+#### Single Sign-On (OIDC)
+- End-to-end OIDC login via the OAuth2 Authorization Code flow with ID-token
+  verification (JWKS, RS256), CSRF `state`/`nonce` protection, and optional
+  auto-provisioning of users on first login.
+- Database-backed OIDC provider management with root-only CRUD endpoints
+  (`/admin/oidc/providers`). Client secrets are encrypted at rest and never
+  returned by the API; provider changes hot-reload without a restart.
+- `STRIX_OIDC_*` environment variables seed a provider on first boot; the
+  console is the source of truth thereafter.
+- Console UI for managing providers (Azure AD, Google, generic) with
+  provider-type presets and a "Test discovery" check, plus "Sign in with SSO"
+  buttons on the login page.
+
+#### Email (SMTP relay)
+- SMTP relay integration (e.g. SMTP2Go) for outbound mail, with the password
+  encrypted at rest and write-only across the admin API.
+- Three notification triggers: notification delivery-failure alerts,
+  security/audit-event alerts (denied requests and privileged changes), and
+  scheduled storage usage reports (daily or weekly).
+- Root-only configuration endpoints (`/admin/smtp`) and a "Send test email"
+  action, surfaced in the console Settings page.
+- `STRIX_SMTP_*` environment variables seed the configuration on first boot.
+
+### Changed
+
+- Documentation reorganized under `docs/` with a single index, mermaid diagrams,
+  and new guides for SSO/OIDC, email alerts, reverse proxying (nginx), and using
+  Strix as an S3 backup target.
+
+### Security
+
+- Cleared all outstanding dependency advisories: bumped `indicatif`
+  (drops unmaintained `number_prefix`) and switched the AWS SDK client to the
+  modern `default-https-client` TLS stack (rustls 0.23 / webpki 0.103, newer
+  `lru`). `cargo audit` and `cargo deny check` now pass with an empty ignore
+  list. Accepted/resolved advisories are tracked under `docs/advisories/`.
+
+## [0.0.0] - 2026-04-03
 
 Initial release of Strix, an S3-compatible object storage server.
 
@@ -79,8 +119,8 @@ Initial release of Strix, an S3-compatible object storage server.
 - Proper identity mapping: temporary credentials resolve to assumed user identity for authorization
 
 #### Dependency Audit
-- All dependencies audited with `cargo audit` (0 vulnerabilities)
-- 3 advisory warnings accepted for v0.1.0 (see SECURITY.md for details)
+- Dependencies audited with `cargo audit`
+- See SECURITY.md for current advisory status and accepted warnings
 
 ### SDK and Tool Compatibility
 

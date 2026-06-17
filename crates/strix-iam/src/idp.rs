@@ -192,6 +192,9 @@ pub struct OidcClaims {
     /// Picture URL.
     #[serde(default)]
     pub picture: Option<String>,
+    /// Nonce echoed back from the authorization request (replay protection).
+    #[serde(default)]
+    pub nonce: Option<String>,
     /// Groups (if groups claim is configured).
     #[serde(default)]
     pub groups: Option<Vec<String>>,

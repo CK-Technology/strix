@@ -488,6 +488,13 @@ fn CreateNotificationForm(
 
     view! {
         <div class="space-y-4">
+            // Delivery status notice
+            <div class="bg-sky-900/30 border border-sky-700 rounded-md p-3 text-sm text-sky-300">
+                "Webhook delivery is active: matching events are POSTed to the target URL with retries, "
+                "and every attempt is recorded for diagnosis. "
+                "AMQP, Kafka, and Redis destinations are stored but not yet delivered."
+            </div>
+
             // Event selection
             <div>
                 <label class="block text-sm font-medium text-slate-300 mb-2">"Events"</label>
@@ -543,9 +550,9 @@ fn CreateNotificationForm(
                     on:change=move |ev| destination_type.set(event_target_value(&ev))
                 >
                     <option value="webhook">"Webhook (HTTP POST)"</option>
-                    <option value="amqp">"AMQP / RabbitMQ"</option>
-                    <option value="kafka">"Kafka"</option>
-                    <option value="redis">"Redis Pub/Sub"</option>
+                    <option value="amqp" disabled>"AMQP / RabbitMQ (not yet available)"</option>
+                    <option value="kafka" disabled>"Kafka (not yet available)"</option>
+                    <option value="redis" disabled>"Redis Pub/Sub (not yet available)"</option>
                 </select>
             </div>
 

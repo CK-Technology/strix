@@ -22,8 +22,8 @@ thiserror.workspace = true
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # S3 client
-aws-config = { version = "1", default-features = false, features = ["rustls"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-config = { version = "1", default-features = false, features = ["rt-tokio", "default-https-client", "behavior-version-latest"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "default-https-client", "behavior-version-latest"] }
 aws-credential-types = "1"
 
 # For config file
@@ -31,7 +31,7 @@ dirs = "6"
 toml = "0.8"
 
 # Progress bars
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Human-readable sizes
 humansize = "2"

@@ -14,7 +14,7 @@ pub async fn run(args: UsageArgs) -> Result<()> {
         .get_alias(&args.alias)
         .ok_or_else(|| anyhow::anyhow!("Alias `{}` not found", args.alias))?;
 
-    let client = AdminClient::new(alias);
+    let mut client = AdminClient::new(alias);
     let usage = client.get_storage_usage().await?;
 
     println!("{}", "Storage Usage".bold());
