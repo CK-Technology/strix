@@ -46,7 +46,7 @@ clap = { version = "4", features = ["derive", "env"] }
 
 # Crypto
 sha2 = "0.10"
-hmac = "0.12"
+hmac = "0.13"
 md-5 = "0.10"
 hex = "0.4"
 base64 = "0.22"
