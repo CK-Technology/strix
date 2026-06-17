@@ -75,7 +75,7 @@ ulid = { version = "1", features = ["serde"] }
 bytes = "1"
 parking_lot = "0.12"
 dashmap = "6"
-rand = "0.9"
+rand = "0.10"
 rust-embed = "8"
 mime_guess = "2"
 
