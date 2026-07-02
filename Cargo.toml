@@ -50,7 +50,7 @@ hmac = "0.13"
 md-5 = "0.11"
 hex = "0.4"
 base64 = "0.22"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 
 # Streams
 async-stream = "0.3"
