@@ -66,7 +66,7 @@ pub fn Settings() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_info.get().and_then(|info| {
-                                            match &*info {
+                                            match &info {
                                                 Ok(i) => Some(view! {
                                                 <dl class="divide-y divide-slate-700">
                                                     <div class="py-3 flex justify-between text-sm">
@@ -99,7 +99,7 @@ pub fn Settings() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_config.get().and_then(|config| {
-                                            match &*config {
+                                            match &config {
                                                 Ok(c) => Some(view! {
                                                     <div class="space-y-4">
                                                         <div>
@@ -356,7 +356,7 @@ fn SmtpSettings() -> impl IntoView {
         <Card title="Email (SMTP Relay)">
             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                 {move || {
-                    config.get().map(|res| match &*res {
+                    config.get().map(|res| match &res {
                         Ok(()) => view! {
                             <div class="space-y-4">
                                 <p class="text-sm text-slate-400">

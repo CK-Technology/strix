@@ -127,7 +127,7 @@ pub fn Events() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small centered=false /> }>
                                     {move || {
                                         buckets.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(bucket_list) => Some(view! {
                                                 <select
                                                     class="px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-strix-500 focus:border-strix-500 text-sm min-w-[200px]"
@@ -175,7 +175,7 @@ pub fn Events() -> impl IntoView {
                                     }
 
                                     notifications.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(Some(response)) => Some(view! {
                                                 <NotificationRulesList
                                                     rules=response.rules.clone()

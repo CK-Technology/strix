@@ -136,7 +136,7 @@ pub fn Tenants() -> impl IntoView {
                         <Card title="Tenant Directory">
                             <Suspense fallback=|| view! { <p class="text-sm text-slate-400">"Loading tenants..."</p> }>
                                 {move || tenants.get().map(|data| {
-                                    let Ok(list) = (*data).clone() else {
+                                    let Ok(list) = data.clone() else {
                                         return view! {
                                             <p class="text-sm text-red-300">{move || tenants_error.get().unwrap_or_else(|| "Failed to load tenants".to_string())}</p>
                                         }.into_any();

@@ -212,7 +212,7 @@ pub fn Metrics() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback message="Loading server info..." size=LoadingSize::Small /> }>
                                 {move || {
                                     server_info.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(info) => Some(view! { <ServerInfoCards info=info.clone() /> }),
                                             Err(_) => None,
                                         }
@@ -227,7 +227,7 @@ pub fn Metrics() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback message="Loading storage stats..." size=LoadingSize::Small /> }>
                                 {move || {
                                     storage_usage.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(usage) => Some(view! { <StorageOverview usage=usage.clone() /> }),
                                             Err(_) => None,
                                         }
@@ -242,7 +242,7 @@ pub fn Metrics() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback message="Loading bucket stats..." size=LoadingSize::Small /> }>
                                 {move || {
                                     storage_usage.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(usage) => Some(view! { <BucketStats usage=usage.clone() /> }),
                                             Err(_) => None,
                                         }

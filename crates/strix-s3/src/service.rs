@@ -45,6 +45,22 @@ struct AuditEvent<'a> {
 
 const OBJECT_TAGS_METADATA_KEY: &str = "strix-object-tags";
 
+fn dto_etag(etag: String) -> ETag {
+    ETag::parse_http_header(etag.as_bytes())
+        .unwrap_or_else(|_| ETag::Strong(etag.trim_matches('"').to_string()))
+}
+
+fn dto_etag_value(etag: ETag) -> String {
+    etag.into_value()
+}
+
+fn dto_etag_condition(condition: ETagCondition) -> String {
+    match condition {
+        ETagCondition::Any => "*".to_string(),
+        ETagCondition::ETag(etag) => dto_etag_value(etag),
+    }
+}
+
 /// S3 service implementation for Strix.
 pub struct StrixS3Service {
     store: Arc<dyn ObjectStore>,
@@ -1129,8 +1145,8 @@ impl S3 for StrixS3Service {
 
         let opts = GetObjectOpts {
             range,
-            if_match: input.if_match,
-            if_none_match: input.if_none_match,
+            if_match: input.if_match.map(dto_etag_condition),
+            if_none_match: input.if_none_match.map(dto_etag_condition),
             if_modified_since: input.if_modified_since.and_then(from_timestamp),
             if_unmodified_since: input.if_unmodified_since.and_then(from_timestamp),
             version_id: input.version_id,
@@ -1182,7 +1198,7 @@ impl S3 for StrixS3Service {
             content_length: Some(content_length as i64),
             content_range,
             content_type,
-            e_tag: Some(response.info.etag),
+            e_tag: Some(dto_etag(response.info.etag)),
             last_modified: Some(to_timestamp(response.info.last_modified)),
             metadata: if response.info.metadata.is_empty() {
                 None
@@ -1274,7 +1290,7 @@ impl S3 for StrixS3Service {
             .map_err(to_s3_error)?;
 
         let output = PutObjectOutput {
-            e_tag: Some(response.etag.clone()),
+            e_tag: Some(dto_etag(response.etag.clone())),
             version_id: response.version_id.clone(),
             ..Default::default()
         };
@@ -1487,7 +1503,7 @@ impl S3 for StrixS3Service {
         let output = HeadObjectOutput {
             content_length: Some(info.size as i64),
             content_type,
-            e_tag: Some(info.etag),
+            e_tag: Some(dto_etag(info.etag)),
             last_modified: Some(to_timestamp(info.last_modified)),
             metadata: if info.metadata.is_empty() {
                 None
@@ -1547,7 +1563,7 @@ impl S3 for StrixS3Service {
                     .map(|obj| Object {
                         key: Some(obj.key),
                         size: Some(obj.size as i64),
-                        e_tag: Some(obj.etag),
+                        e_tag: Some(dto_etag(obj.etag)),
                         last_modified: Some(to_timestamp(obj.last_modified)),
                         storage_class: Some(to_object_storage_class(obj.storage_class)),
                         owner: None,
@@ -1622,7 +1638,7 @@ impl S3 for StrixS3Service {
                     .map(|obj| Object {
                         key: Some(obj.key),
                         size: Some(obj.size as i64),
-                        e_tag: Some(obj.etag),
+                        e_tag: Some(dto_etag(obj.etag)),
                         last_modified: Some(to_timestamp(obj.last_modified)),
                         storage_class: Some(to_object_storage_class(obj.storage_class)),
                         owner: None,
@@ -1678,6 +1694,12 @@ impl S3 for StrixS3Service {
             CopySource::AccessPoint { .. } => {
                 return Err(s3_error!(InvalidArgument, "Access point not supported"));
             }
+            CopySource::Outpost { .. } => {
+                return Err(s3_error!(
+                    InvalidArgument,
+                    "Outpost copy source not supported"
+                ));
+            }
         };
 
         // Copy source format: bucket/key
@@ -1725,7 +1747,7 @@ impl S3 for StrixS3Service {
 
         let output = CopyObjectOutput {
             copy_object_result: Some(CopyObjectResult {
-                e_tag: Some(response.etag),
+                e_tag: Some(dto_etag(response.etag)),
                 last_modified: Some(to_timestamp(response.last_modified)),
                 checksum_crc32: None,
                 checksum_crc32c: None,
@@ -1870,7 +1892,7 @@ impl S3 for StrixS3Service {
             .map_err(to_s3_error)?;
 
         let output = UploadPartOutput {
-            e_tag: Some(part_info.etag),
+            e_tag: Some(dto_etag(part_info.etag)),
             ..Default::default()
         };
 
@@ -1918,6 +1940,12 @@ impl S3 for StrixS3Service {
                 return Err(s3_error!(
                     InvalidArgument,
                     "Access point copy source not supported"
+                ));
+            }
+            CopySource::Outpost { .. } => {
+                return Err(s3_error!(
+                    InvalidArgument,
+                    "Outpost copy source not supported"
                 ));
             }
         };
@@ -1983,7 +2011,7 @@ impl S3 for StrixS3Service {
 
         let output = UploadPartCopyOutput {
             copy_part_result: Some(CopyPartResult {
-                e_tag: Some(part_info.etag),
+                e_tag: Some(dto_etag(part_info.etag)),
                 last_modified: Some(to_timestamp(part_info.last_modified)),
                 checksum_crc32: None,
                 checksum_crc32c: None,
@@ -2036,7 +2064,7 @@ impl S3 for StrixS3Service {
             .into_iter()
             .map(|p| CompletePart {
                 part_number: p.part_number.unwrap_or(0) as u16,
-                etag: p.e_tag.unwrap_or_default(),
+                etag: p.e_tag.map(dto_etag_value).unwrap_or_default(),
             })
             .collect();
 
@@ -2061,7 +2089,7 @@ impl S3 for StrixS3Service {
         let output = CompleteMultipartUploadOutput {
             bucket: Some(input.bucket),
             key: Some(input.key),
-            e_tag: Some(response.etag),
+            e_tag: Some(dto_etag(response.etag)),
             location: None,
             version_id: response.version_id,
             ..Default::default()
@@ -2146,7 +2174,7 @@ impl S3 for StrixS3Service {
         let part_number_marker = input
             .part_number_marker
             .as_ref()
-            .and_then(|s| s.parse::<u16>().ok());
+            .and_then(|s| u16::try_from(*s).ok());
 
         let max_parts = input.max_parts.map(|m| m as u32).unwrap_or(1000);
         let opts = ListPartsOpts {
@@ -2167,14 +2195,14 @@ impl S3 for StrixS3Service {
             max_parts: Some(max_parts as i32),
             is_truncated: Some(response.is_truncated),
             part_number_marker: input.part_number_marker,
-            next_part_number_marker: response.next_part_number_marker.map(|m| m.to_string()),
+            next_part_number_marker: response.next_part_number_marker.map(i32::from),
             parts: Some(
                 response
                     .parts
                     .into_iter()
                     .map(|p| Part {
                         part_number: Some(p.part_number as i32),
-                        e_tag: Some(p.etag),
+                        e_tag: Some(dto_etag(p.etag)),
                         size: Some(p.size as i64),
                         last_modified: Some(to_timestamp(p.last_modified)),
                         checksum_crc32: None,
@@ -2315,7 +2343,7 @@ impl S3 for StrixS3Service {
                         .map(|v| ObjectVersion {
                             checksum_algorithm: None,
                             checksum_type: None,
-                            e_tag: v.etag,
+                            e_tag: v.etag.map(dto_etag),
                             is_latest: Some(v.is_latest),
                             key: Some(v.key),
                             last_modified: Some(to_timestamp(v.last_modified)),

@@ -131,7 +131,7 @@ pub fn AccessKeys() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                 {move || {
                                     users_and_keys.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(items) => Some(view! {
                                                 <AccessKeyList items=items.clone() />
                                             }),
@@ -282,7 +282,7 @@ fn CreateKeyForm(
                 <Suspense fallback=|| view! { <LoadingFallback message="Loading users..." size=LoadingSize::Small /> }>
                     {move || {
                         users.get().and_then(|data| {
-                            match &*data {
+                            match &data {
                                 Ok(user_list) => Some(view! {
                                 <select
                                     class="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md shadow-sm text-white focus:outline-none focus:ring-strix-500 focus:border-strix-500 sm:text-sm"

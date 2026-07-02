@@ -125,7 +125,7 @@ pub fn Policies() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                 {move || {
                                     policies.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(policy_list) => Some(view! {
                                                 <PolicyTable policies=policy_list.clone() />
                                             }),

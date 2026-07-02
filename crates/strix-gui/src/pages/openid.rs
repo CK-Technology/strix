@@ -349,7 +349,7 @@ pub fn OpenId() -> impl IntoView {
                         <Card>
                             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                 {move || {
-                                    providers.get().and_then(|data| match &*data {
+                                    providers.get().and_then(|data| match &data {
                                         Ok(list) => Some(view! {
                                             <ProviderTable providers=list.clone() edit_request=edit_request />
                                         }),

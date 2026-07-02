@@ -117,7 +117,7 @@ pub fn Buckets() -> impl IntoView {
     // Extract unique prefixes from bucket names for prefix chips
     let prefixes = move || {
         buckets.get().and_then(|data| {
-            match &*data {
+            match &data {
                 Ok(bucket_list) => Some(bucket_list.clone()),
                 Err(_) => None,
             }.map(|bucket_list| {
@@ -141,7 +141,7 @@ pub fn Buckets() -> impl IntoView {
     // Filter buckets based on search and prefix
     let filtered_buckets = move || {
         buckets.get().and_then(|data| {
-            match &*data {
+            match &data {
                 Ok(bucket_list) => Some(bucket_list.clone()),
                 Err(_) => None,
             }.map(|bucket_list| {
@@ -259,7 +259,7 @@ pub fn Buckets() -> impl IntoView {
                                 {move || {
                                     filtered_buckets().map(|bucket_list| {
                                         let total_count = buckets.get()
-                                            .and_then(|d| match &*d {
+                                            .and_then(|d| match &d {
                                                 Ok(l) => Some(l.len()),
                                                 Err(_) => None,
                                             })
@@ -457,7 +457,7 @@ fn CreateBucketForm(
                 >
                     <option value="">"No tenant prefix"</option>
                     {move || tenants_resource.get().map(|data| {
-                        match &*data {
+                        match &data {
                             Ok(list) => list.clone().into_iter().map(|t| {
                                 let slug = t.slug.clone();
                                 let label = format!("{} ({})", t.name, t.slug);
@@ -1234,7 +1234,7 @@ pub fn BucketDetail() -> impl IntoView {
                                     {move || {
                                         let app_state_for_preview_outer = app_state_for_preview.clone();
                                         objects.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(response) => Some(response.clone()),
                                                 Err(_) => None,
                                             }.map(|response| {
@@ -1279,7 +1279,7 @@ pub fn BucketDetail() -> impl IntoView {
                                 </Suspense>
                                 {move || {
                                     objects.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(_) => None,
                                             Err(e) => Some(view! {
                                                 <div class="mt-3 rounded-md bg-red-900/40 border border-red-700 p-3 text-sm text-red-200">

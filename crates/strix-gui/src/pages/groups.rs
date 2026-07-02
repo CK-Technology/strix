@@ -99,7 +99,7 @@ pub fn Groups() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                 {move || {
                                     groups.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(group_list) => Some(view! {
                                                 <GroupTable groups=group_list.clone() />
                                             }),
@@ -351,7 +351,7 @@ pub fn GroupDetail() -> impl IntoView {
                         <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                             {move || {
                                 group.get().and_then(|data| {
-                                    match &*data {
+                                    match &data {
                                         Ok(g) => Some(g.clone()),
                                         Err(_) => None,
                                     }.map(|g| {

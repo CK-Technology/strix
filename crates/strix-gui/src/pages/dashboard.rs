@@ -77,7 +77,7 @@ pub fn Dashboard() -> impl IntoView {
                             <Suspense fallback=|| view! { <StatCardSkeleton /> }>
                                 {move || {
                                     storage_usage.get().and_then(|usage| {
-                                        match &*usage {
+                                        match &usage {
                                             Ok(u) => Some(view! {
                                                 <StatCard
                                                     title="Total Buckets"
@@ -93,7 +93,7 @@ pub fn Dashboard() -> impl IntoView {
                             <Suspense fallback=|| view! { <StatCardSkeleton /> }>
                                 {move || {
                                     storage_usage.get().and_then(|usage| {
-                                        match &*usage {
+                                        match &usage {
                                             Ok(u) => Some(view! {
                                                 <StatCard
                                                     title="Total Objects"
@@ -109,7 +109,7 @@ pub fn Dashboard() -> impl IntoView {
                             <Suspense fallback=|| view! { <StatCardSkeleton /> }>
                                 {move || {
                                     storage_usage.get().and_then(|usage| {
-                                        match &*usage {
+                                        match &usage {
                                             Ok(u) => Some(view! {
                                                 <StatCard
                                                     title="Total Size"
@@ -125,7 +125,7 @@ pub fn Dashboard() -> impl IntoView {
                             <Suspense fallback=|| view! { <StatCardSkeleton /> }>
                                 {move || {
                                     server_info.get().and_then(|info| {
-                                        match &*info {
+                                        match &info {
                                             Ok(i) => Some(view! {
                                                 <StatCard
                                                     title="Uptime"
@@ -181,7 +181,7 @@ pub fn Dashboard() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_info.get().and_then(|info| {
-                                            match &*info {
+                                            match &info {
                                                 Ok(i) => Some(view! { <ServerInfoTable info=i.clone() /> }),
                                                 Err(_) => None,
                                             }
@@ -194,7 +194,7 @@ pub fn Dashboard() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         storage_usage.get().and_then(|usage| {
-                                            match &*usage {
+                                            match &usage {
                                                 Ok(u) => Some(view! { <BucketUsageList usage=u.clone() /> }),
                                                 Err(_) => None,
                                             }

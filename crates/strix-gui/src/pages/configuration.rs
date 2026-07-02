@@ -95,7 +95,7 @@ pub fn Configuration() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                 {move || {
                                     server_info.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(info) => Some(view! {
                                             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                 <StatusCard
@@ -133,7 +133,7 @@ pub fn Configuration() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_config.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(config) => Some(view! {
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <ConfigItem
@@ -172,7 +172,7 @@ pub fn Configuration() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_config.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(config) => Some(view! {
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <ConfigItem
@@ -232,7 +232,7 @@ pub fn Configuration() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         server_config.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(config) => Some(view! {
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <ConfigItem

@@ -197,7 +197,7 @@ pub fn Audit() -> impl IntoView {
                             <Suspense fallback=|| view! { <LoadingFallback message="Loading audit logs..." size=LoadingSize::Small /> }>
                                 {move || {
                                     audit_logs.get().and_then(|data| {
-                                        match &*data {
+                                        match &data {
                                             Ok(response) => Some(view! {
                                                 <AuditLogTable
                                                     entries=response.entries.clone()

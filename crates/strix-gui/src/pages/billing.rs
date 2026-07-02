@@ -62,7 +62,7 @@ pub fn BillingExports() -> impl IntoView {
                 Ok(usage) => {
                     let tenant_list = tenants_resource
                         .get()
-                        .and_then(|d| match &*d {
+                        .and_then(|d| match &d {
                             Ok(items) => Some(items.clone()),
                             Err(_) => None,
                         })
@@ -157,7 +157,7 @@ pub fn BillingExports() -> impl IntoView {
                                     >
                                         <option value="">"All tenants"</option>
                                         {move || tenants_resource.get().map(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(list) => list.clone().into_iter().map(|t| {
                                                     let slug = t.slug.clone();
                                                     let label = format!("{} ({})", t.name, t.slug);

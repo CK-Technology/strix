@@ -48,7 +48,7 @@ pub fn Users() -> impl IntoView {
     // Filter users based on search
     let filtered_users = move || {
         users.get().and_then(|data| {
-            match &*data {
+            match &data {
                 Ok(user_list) => Some(user_list.clone()),
                 Err(_) => None,
             }.map(|user_list| {
@@ -123,7 +123,7 @@ pub fn Users() -> impl IntoView {
                                 {move || {
                                     filtered_users().map(|user_list| {
                                         let total_count = users.get()
-                                            .and_then(|d| match &*d {
+                                            .and_then(|d| match &d {
                                                 Ok(l) => Some(l.len()),
                                                 Err(_) => None,
                                             })
@@ -533,7 +533,7 @@ pub fn UserDetail() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         user.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(u) => Some(view! {
                                                 <dl class="divide-y divide-slate-700">
                                                     <div class="py-3 flex justify-between text-sm">
@@ -604,7 +604,7 @@ pub fn UserDetail() -> impl IntoView {
                                 <Suspense fallback=|| view! { <LoadingFallback size=LoadingSize::Small /> }>
                                     {move || {
                                         access_keys.get().and_then(|data| {
-                                            match &*data {
+                                            match &data {
                                                 Ok(keys) => Some(view! {
                                                     <AccessKeyList keys=keys.clone() />
                                                 }),

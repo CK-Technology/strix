@@ -19,14 +19,14 @@ futures = "0.3"
 # HTTP / Web
 axum = "0.8"
 tower = "0.5"
-tower-http = { version = "0.6", features = ["trace", "cors", "compression-gzip", "compression-deflate"] }
+tower-http = { version = "0.7", features = ["trace", "cors", "compression-gzip", "compression-deflate"] }
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 http = "1"
 
 # S3 Protocol
-s3s = "0.11"
+s3s = { git = "https://github.com/Nugine/s3s.git", rev = "8ec0bbe4116880e801a6ff1a3fa4aed7a796dc4d" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -61,9 +61,9 @@ chrono = { version = "0.4", features = ["serde"] }
 time = "0.3"
 
 # JWT and Auth
-# jsonwebtoken 10 requires explicitly selecting a crypto provider; use the
-# pure-Rust backend to stay consistent with the rest of the stack (RustCrypto + rustls).
-jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+# jsonwebtoken 10 requires explicitly selecting a crypto provider. Use aws-lc-rs
+# to avoid the vulnerable RustCrypto rsa backend.
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 
 # HTTP Client
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
@@ -87,7 +87,7 @@ tokio-rusqlite = "0.6"
 
 # Metrics
 metrics = "0.24"
-metrics-exporter-prometheus = "0.16"
+metrics-exporter-prometheus = "0.18"
 
 # Internal crates
 strix-core = { path = "crates/strix-core" }
