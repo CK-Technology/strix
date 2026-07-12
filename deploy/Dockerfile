@@ -8,7 +8,7 @@
 # =============================================================================
 # Stage 1: Build the GUI (WASM)
 # =============================================================================
-FROM rust:1.96-bookworm AS gui-builder
+FROM rust:1.97-bookworm AS gui-builder
 
 RUN cargo install trunk
 RUN rustup target add wasm32-unknown-unknown
@@ -31,7 +31,7 @@ RUN test -f dist/index.html && ls dist/*.wasm >/dev/null 2>&1 \
 # =============================================================================
 # Stage 2: Build the Rust binary (embeds GUI assets via rust-embed)
 # =============================================================================
-FROM rust:1.96-bookworm AS builder
+FROM rust:1.97-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
